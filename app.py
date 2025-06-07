@@ -1,7 +1,6 @@
 from flask import Flask, render_template, request, session, send_file, redirect, url_for, jsonify
 import pandas as pd
-from optimizer_gurobi import optimize, METHODS, compute_damage
-import numpy as np
+
 # 추가: 워드클라우드 관련
 from collections import Counter
 import io, base64
@@ -74,43 +73,35 @@ def index():
     tutorial_mode = not session.get("tutorial_seen", False)
 
     # ── 2. skeletons for the template (stay None on plain GET)
-    recs = metrics = insights = None
+    products = None
     wordcloud_url = None
 
     # ── 3. Handle the POST: run the optimiser & build the dashboard
     if request.method == "POST":
 
-        # ── 3-a. grab inputs ─────────────────────────────────────────────────
-        budget          = float(request.form["budget"])
-        hours_available = float(request.form["total_hours_available"])
-
-        # 브랜드 이름 받아서 코드 추출
+        # 브랜드 이름과 자사몰 URL 입력 받기
         brand_name = request.form.get("brand_name")
-        brand_code = None
+        brand_url = request.form.get("brand_url")
+        products = []
         if brand_name:
             try:
-                from crawlers.olive_crawler import get_brand_code, crawl_brand_all, crawl_reviews_for_goods
+                from crawlers.olive_crawler import get_brand_code, crawl_brand_all
                 brand_code = get_brand_code(brand_name)
                 total_products_df = crawl_brand_all(brand_code, limit=3)
-                goods_nos = total_products_df['goodsNo'].tolist()
-                total_reviews_df = crawl_reviews_for_goods(goods_nos, limit=5)
+                for _, row in total_products_df.iterrows():
+                    products.append({
+                        'name': row['name'],
+                        'rating': row['rating'],
+                        'risk': '추후 예정',
+                        'complaint_keywords': '추후 예정'
+                    })
             except Exception as e:
-                print(f"[ERROR] 올리브영 브랜드코드 추출 실패: {e}")
-            prodlist_df = crawl_brand_all(brand_code)
-        else:
-            df              = pd.read_csv("reviews_sample_15.csv")
-
-        # optional “allowed methods”; default = all five
-        allowed = request.form.getlist("methods") or METHODS
-
-        # ── 3-b. optimise & build dashboard numbers ──────────────────────────
-        rec_df, sens = optimize(
-            df,
-            budget,
-            hours_available,
-            allowed_methods=allowed
+                print(f"[ERROR] 브랜드 코드 추출 실패: {e}")
+        return render_template(
+            "index.html",
+            products=products,
+            tutorial_mode=tutorial_mode
         )
-        init_progress(len(df))  # 전체 리뷰 개수로 초기화 (POST에서만!)
 
         # ── 3-c. add risk buckets for UI chips ─────────────────────────────
         # percentiles ≈ terciles → dynamic to the current batch
@@ -408,12 +399,8 @@ def index():
 
     return render_template(
         "index.html",
-        tutorial_mode          = tutorial_mode,
-        methods                = METHODS,
-        recommended_responses  = recs,
-        metrics                = metrics,
-        insights               = insights,
-        wordcloud_url          = wordcloud_url
+        tutorial_mode = tutorial_mode,
+        products = products
     )
 
 

@@ -36,107 +36,54 @@
 ──────────────────────────────────────────────────── -->
 <div class="card">
   <form method="POST" enctype="multipart/form-data" id="plannerForm">
-    <!-- ① 대응 방법 -->
-    <label>사용할 대응 방법을 선택하세요</label>
-    <div class="methods-grid">
-      {% for m in methods %}
-        <label class="checkbox">
-          <input type="checkbox" name="methods" value="{{ m }}" checked>
-          {{ method_labels[m] }}
-        </label>
-      {% endfor %}
-    </div>
-
-    <!-- ② 예산 -->
-    <label for="budget">총 예산(원)</label>
-    <input type="number" step="0.01" name="budget" id="budget" placeholder="예: 100000" required>
-
-    <!-- ③ 전화 시간 -->
-    <label for="total_hours_available">직접 대응 가능 시간(시간)</label>
-    <input type="number" step="0.01" name="total_hours_available"
-           id="total_hours_available" placeholder="예: 10" required>
-
-    <!-- ④ 브랜드 이름 입력 -->
     <label for="brand_name">브랜드 이름을 입력하세요</label>
     <input type="text" name="brand_name" id="brand_name" placeholder="예: 토리든" required>
 
     <label for="brand_url">자사몰 URL을 입력하세요</label>
     <input type="text" name="brand_url" id="brand_url" placeholder="예: https://www.torriden.com/" required>
 
-    <!-- 최종 -->
     <button type="submit">VoC 듣기</button>
+    <div id="loading-spinner" style="display:none; text-align:center; margin-top:1em;">
+      <div class="spinner" style="display:inline-block; width:40px; height:40px; border:4px solid #eee; border-top:4px solid #22b86b; border-radius:50%; animation:spin 1s linear infinite;"></div>
+      <div style="margin-top:0.5em; color:#22b86b; font-weight:600;">상품 정보를 불러오는 중...</div>
+    </div>
+    <style>
+      @keyframes spin { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }
+    </style>
+    <script>
+      document.getElementById('plannerForm').addEventListener('submit', function() {
+        document.getElementById('loading-spinner').style.display = '';
+      });
+    </script>
   </form>
 </div>
 
 <!-- ────────────────────────────────────────────────
      C.  ROI 대시보드
 ──────────────────────────────────────────────────── -->
-{% if metrics %}
-  <h2 style="margin:3rem 0 1rem;">효과 한눈에 보기</h2>
-  <div class="metric-grid">
-    <div class="metric-card">
-      <span class="metric-label">예상 손해 방지 금액</span>
-      <span class="metric-value">
-        ₩ {{ "{:,.0f}".format(metrics.net_damage_prevented) }}
-      </span>
-    </div>
-    <div class="metric-card">
-      <span class="metric-label">예상 평균별점 상승량</span>
-      <span class="metric-value">{{ metrics.avg_star_delta|round(2) }}★</span>
-    </div>
-    <div class="metric-card">
-      <span class="metric-label">예상 응답 시간 절감량</span>
-      <span class="metric-value">{{ metrics.response_time_saved|round(1) }}시간</span>
-    </div>
-    <div class="metric-card">
-      <span class="metric-label">브랜드 평판 회복량</span>
-      <span class="metric-value">
-        {{ (metrics.review_recovery_rate*100)|round }}%
-      </span>
-    </div>
-  </div>
+{% if products %}
+  <h2 style="margin:2rem 0 1rem;">상품별 VoC 요약</h2>
+  <table class="voc-table" style="width:100%; border-collapse:collapse;">
+    <thead>
+      <tr style="background:#f2f2f2;">
+        <th style="padding:0.7em; border:1px solid #ddd;">상품명</th>
+        <th style="padding:0.7em; border:1px solid #ddd;">별점</th>
+        <th style="padding:0.7em; border:1px solid #ddd;">위험수치</th>
+        <th style="padding:0.7em; border:1px solid #ddd;">불평 키워드</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in products %}
+      <tr>
+        <td style="padding:0.7em; border:1px solid #ddd;">{{ p.name }}</td>
+        <td style="padding:0.7em; border:1px solid #ddd;">{{ p.rating }}</td>
+        <td style="padding:0.7em; border:1px solid #ddd; color:#bbb;">추후 예정</td>
+        <td style="padding:0.7em; border:1px solid #ddd; color:#bbb;">추후 예정</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 {% endif %}
-
-{% if metrics and insights %}
-  <h2 style="margin:2.5rem 0 1rem;">🧐 만약에 인사이트</h2>
-  <div class="metric-grid">
-    {% if insights is not none %}
-      <div class="metric-card">
-        <span class="metric-label">예산 1 천원 추가 시<br>추가 손실 절감</span>
-        <span class="metric-value">
-          ₩ {{ "{:,.0f}".format(insights.save_per_1k_budget) }}
-        </span>
-        {% if insights.budget_headroom %}
-          <span class="metric-note">
-            (현재 설정 기준 최대&nbsp;
-            ₩{{ "{:,.0f}".format(insights.budget_headroom) }} 원 추가까지 같은 효율)
-          </span>
-        {% endif %}
-        {% if insights.budget_note %}
-          <span class="metric-note" style="color:#d63384;">{{ insights.budget_note }}</span>
-        {% endif %}
-      </div>
-    {% endif %}
-
-    {% if insights is not none %}
-      <div class="metric-card">
-        <span class="metric-label">직접 대응 시간 1시간<br>추가 시 손실 절감</span>
-        <span class="metric-value">
-          ₩ {{ "{:,.0f}".format(insights.save_per_hour) }}
-        </span>
-        {% if insights.hour_headroom %}
-          <span class="metric-note">
-            (최대&nbsp;{{ insights.hour_headroom|round(1) }} 시간 추가까지 같은 효율)
-          </span>
-        {% endif %}
-        {% if insights.time_note %}
-          <span class="metric-note" style="color:#d63384;">{{ insights.time_note }}</span>
-        {% endif %}
-      </div>
-    {% endif %}
-  </div>
-{% endif %}
-
 
 <!-- ────────────────────────────────────────────────
      D.  추천 액션 테이블
