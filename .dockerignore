@@ -1,0 +1,16 @@
+# build context diet ✂︎
+.git
+.github
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite*
+*.log
+.vscode/
+.idea/
+.env
+tests/
+docs/
+docker_method.txt

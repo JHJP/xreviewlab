@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ title or 'X Review Lab(엑스 리뷰 랩)' }}</title>
+
+  <!-- SEO & Korean social share -->
+  <meta name="description" content="부정 리뷰가 매출을 갉아먹기 전에 AI + 최적화로 대응 플랜을 자동 생성합니다.">
+  <meta property="og:locale" content="ko_KR">
+
+  <!-- ► Google Font : Pretendard -->
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- ► Main stylesheet -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+  <!-- ► loading spinner (hidden by default) -->
+  <div id="loading-overlay" class="overlay" style="display:none">
+    <div class="overlay-card" style="background:transparent;box-shadow:none">
+      <div class="spinner"></div>
+      <div class="main-message" style="color:#fff;font-weight:600;font-size:1.15em;margin-top:12px;">
+        AI가 리뷰를 꼼꼼히 분석하고, 고객님께 꼭 맞는 답변을 준비하고 있습니다.
+      </div>
+      <div class="sub-message" style="color:#eee;font-size:0.98em;margin-top:6px;">
+        고객님의 소중한 의견이 더 나은 서비스로 이어질 수 있도록,<br>
+        AI가 실제 상담원처럼 한 줄 한 줄 신중하게 답변을 작성 중입니다.
+      </div>
+      <div class="progress-bar-outer" style="background:#fff3; border-radius:8px; height:18px; margin:18px 0 0 0; width:85%; max-width:380px; margin-left:auto; margin-right:auto; box-shadow:0 1px 4px #0002;">
+        <div id="progress-bar" style="height:100%; width:0%; background:linear-gradient(90deg,#ffd700,#4fc3f7); border-radius:8px; transition:width 0.3s;"></div>
+      </div>
+      <div id="progress-text" style="color:#fff; font-size:0.99em; margin-top:7px; text-align:center; font-weight:500;">AI 준비 중...</div>
+      <div class="trivia-message" style="color:#ffd700;font-size:0.95em;margin-top:10px;">
+        💡 AI는 실제 상담원처럼 고객의 감정을 이해하려고 노력합니다!
+      </div>
+    </div>
+  </div>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="{{ url_for('index') }}" class="logo-link">
+        <img src="{{ url_for('static', filename='img/logo.svg') }}"
+             alt="X Review Lab logo"
+             class="logo"
+             width="240"
+             height="240">
+      </a>
+    </div>
+  </header>
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+
+  <!-- original tutorial.js -->
+  <script src="{{ url_for('static', filename='tutorial.js') }}"></script>
+  <!-- ► new UX helpers -->
+  <script src="{{ url_for('static', filename='ui.js') }}"></script>
+</body>
+</html>

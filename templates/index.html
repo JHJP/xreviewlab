@@ -1,0 +1,409 @@
+{# templates/index.html #}
+{% extends "base.html" %}
+
+{# 대응 방법 한글 라벨 매핑 -------------------------------------- #}
+{% set method_labels = {
+  'text_reply'     : '댓글로 답장',
+  'chat_followup'  : '채팅방 답장',
+  'phone_call'     : '전화하기',
+  'discount_coupon': '쿠폰 보내기',
+  'vip_apology'    : 'VIP 사과'
+} %}
+
+{% block content %}
+
+<!-- ────────────────────────────────────────────────
+     A.  첫 화면 / 온보딩 오버레이
+──────────────────────────────────────────────────── -->
+<div id="welcome-overlay" class="overlay"
+     {% if not tutorial_mode %}style="display:none"{% endif %}>
+  <div class="overlay-card">
+    <h1>엑스 리뷰 랩에 오신 걸<br> 환영해요 👋</h1>
+    <p>
+      우리 서비스는 <strong>나쁜 리뷰</strong>를 먼저 잡아내서<br>
+      <strong>고객의 소리(VoC)</strong>가 <strong>생산공정</strong>에 반영되는 효율을 높여줘요.<br>
+      아래 버튼을 누르면<br> <strong>3분</strong> 만에 <strong>샘플</strong> 화면을 볼 수 있어요!
+    </p>
+    <button id="startTutorialBtn">시작하기</button>
+  </div>
+</div>
+
+<h1>리뷰 대응 플래너</h1>
+<p class="tagline">AI와 최적화가 <strong>가장 중요한 고객의 소리</strong>부터 해결합니다.</p>
+
+<!-- ────────────────────────────────────────────────
+     B.  입력 카드
+──────────────────────────────────────────────────── -->
+<div class="card">
+  <form method="POST" enctype="multipart/form-data" id="plannerForm">
+    <!-- ① 대응 방법 -->
+    <label>사용할 대응 방법을 선택하세요</label>
+    <div class="methods-grid">
+      {% for m in methods %}
+        <label class="checkbox">
+          <input type="checkbox" name="methods" value="{{ m }}" checked>
+          {{ method_labels[m] }}
+        </label>
+      {% endfor %}
+    </div>
+
+    <!-- ② 예산 -->
+    <label for="budget">총 예산(원)</label>
+    <input type="number" step="0.01" name="budget" id="budget" placeholder="예: 100000" required>
+
+    <!-- ③ 전화 시간 -->
+    <label for="total_hours_available">직접 대응 가능 시간(시간)</label>
+    <input type="number" step="0.01" name="total_hours_available"
+           id="total_hours_available" placeholder="예: 10" required>
+
+    <!-- ④ 브랜드 이름 입력 -->
+    <label for="brand_name">브랜드 이름을 입력하세요</label>
+    <input type="text" name="brand_name" id="brand_name" placeholder="예: 토리든" required>
+
+    <label for="brand_url">자사몰 URL을 입력하세요</label>
+    <input type="text" name="brand_url" id="brand_url" placeholder="예: https://www.torriden.com/" required>
+
+    <!-- 최종 -->
+    <button type="submit">대응 플랜 생성</button>
+  </form>
+</div>
+
+<!-- ────────────────────────────────────────────────
+     C.  ROI 대시보드
+──────────────────────────────────────────────────── -->
+{% if metrics %}
+  <h2 style="margin:3rem 0 1rem;">효과 한눈에 보기</h2>
+  <div class="metric-grid">
+    <div class="metric-card">
+      <span class="metric-label">예상 손해 방지 금액</span>
+      <span class="metric-value">
+        ₩ {{ "{:,.0f}".format(metrics.net_damage_prevented) }}
+      </span>
+    </div>
+    <div class="metric-card">
+      <span class="metric-label">예상 평균별점 상승량</span>
+      <span class="metric-value">{{ metrics.avg_star_delta|round(2) }}★</span>
+    </div>
+    <div class="metric-card">
+      <span class="metric-label">예상 응답 시간 절감량</span>
+      <span class="metric-value">{{ metrics.response_time_saved|round(1) }}시간</span>
+    </div>
+    <div class="metric-card">
+      <span class="metric-label">브랜드 평판 회복량</span>
+      <span class="metric-value">
+        {{ (metrics.review_recovery_rate*100)|round }}%
+      </span>
+    </div>
+  </div>
+{% endif %}
+
+{% if metrics and insights %}
+  <h2 style="margin:2.5rem 0 1rem;">🧐 만약에 인사이트</h2>
+  <div class="metric-grid">
+    {% if insights is not none %}
+      <div class="metric-card">
+        <span class="metric-label">예산 1 천원 추가 시<br>추가 손실 절감</span>
+        <span class="metric-value">
+          ₩ {{ "{:,.0f}".format(insights.save_per_1k_budget) }}
+        </span>
+        {% if insights.budget_headroom %}
+          <span class="metric-note">
+            (현재 설정 기준 최대&nbsp;
+            ₩{{ "{:,.0f}".format(insights.budget_headroom) }} 원 추가까지 같은 효율)
+          </span>
+        {% endif %}
+        {% if insights.budget_note %}
+          <span class="metric-note" style="color:#d63384;">{{ insights.budget_note }}</span>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    {% if insights is not none %}
+      <div class="metric-card">
+        <span class="metric-label">직접 대응 시간 1시간<br>추가 시 손실 절감</span>
+        <span class="metric-value">
+          ₩ {{ "{:,.0f}".format(insights.save_per_hour) }}
+        </span>
+        {% if insights.hour_headroom %}
+          <span class="metric-note">
+            (최대&nbsp;{{ insights.hour_headroom|round(1) }} 시간 추가까지 같은 효율)
+          </span>
+        {% endif %}
+        {% if insights.time_note %}
+          <span class="metric-note" style="color:#d63384;">{{ insights.time_note }}</span>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+{% endif %}
+
+
+<!-- ────────────────────────────────────────────────
+     D.  추천 액션 테이블
+──────────────────────────────────────────────────── -->
+{% if recommended_responses %}
+  <!-- 워드클라우드 안내 및 표시 -->
+  <div style="margin-top:2.2rem; margin-bottom:0.2rem;">
+    <div style="font-size:0.97em; color:#666; margin-bottom:0.35em; text-align:center;">
+      아래 워드클라우드는 최근 리뷰에서 자주 언급된 주요 키워드를 시각화한 것입니다.<br>
+      단어가 클수록 더 많이 언급된 의미입니다.
+    </div>
+    <div id="wordCloud" style="width:100%; height:260px; margin-bottom:1.4rem;"></div>
+  </div>
+  <h2 style="margin-top:1.3rem;">추천 조치</h2>
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem; gap:1.5em;">
+    <a href="/download_report" class="banner-btn" style="padding:0.5em 1.2em; font-size:0.98em;">리포트 다운로드 (엑셀)</a>
+    <form id="emailReportForm" method="POST" action="/send_report_email" style="display:flex; align-items:center; gap:0.5em;">
+      <input type="email" name="email" placeholder="이메일 입력" required style="padding:0.45em 0.8em; border-radius:7px; border:1px solid #ccc; font-size:0.97em;">
+      <button type="submit" class="banner-btn" style="padding:0.5em 1.2em; font-size:0.98em; background:#2ED47A;">이메일로 리포트 발송</button>
+    </form>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/wordcloud@1.2.2/src/wordcloud2.min.js"></script>
+  <script>
+    document.getElementById('emailReportForm').onsubmit = async function(e) {
+      e.preventDefault();
+      const form = e.target;
+      const formData = new FormData(form);
+      const res = await fetch(form.action, {
+        method: 'POST',
+        body: formData
+      });
+      const text = await res.text();
+      alert(text);
+    };
+  </script>
+  {% if wordcloud_url %}
+    <div style="text-align:center; margin-bottom:1.5rem;">
+      <img src="{{ wordcloud_url }}" alt="워드클라우드" style="max-width:100%; height:auto;">
+      <div style="font-size:0.95em; color:#888; margin-top:0.2em;">전체 리뷰 키워드 요약</div>
+    </div>
+  {% endif %}
+  <!-- 추천 조치별(대응 방법별) 필터 드롭다운 -->
+  <div class="filter-bar" style="display:flex; flex-wrap:wrap; gap:1.5em; align-items:center; margin-bottom:1.2em;">
+    <label for="methodFilter" style="font-weight:600; margin-right:0.5em;">대응 방법</label>
+    <select id="methodFilter" style="min-width:110px; padding:0.4em 1.2em; border-radius:6px; border:1px solid #bbb; font-size:1em;">
+      <option value="all">전체</option>
+      {% for m in methods %}
+        <option value="{{ m }}">{{ method_labels[m] }}</option>
+      {% endfor %}
+    </select>
+    <label for="categoryFilter" style="font-weight:600; margin-left:1.5em; margin-right:0.5em;">카테고리</label>
+    <select id="categoryFilter" style="min-width:90px; padding:0.4em 1.2em; border-radius:6px; border:1px solid #bbb; font-size:1em;">
+      <option value="all">전체</option>
+      <option value="품질">품질</option>
+      <option value="가격">가격</option>
+      <option value="서비스">서비스</option>
+      <option value="기타">기타</option>
+    </select>
+    <button type="button" id="resetFiltersBtn" class="reset-btn">필터 초기화</button>
+    <style>
+      .reset-btn {
+        margin-left:1.5em;
+        padding:0.35em 1em;
+        border-radius:6px;
+        border:1px solid #2ED47A;
+        background:#2ED47A;
+        color:#fff;
+        font-size:0.97em;
+        font-weight:600;
+        cursor:pointer;
+        transition: background 0.18s, color 0.18s;
+      }
+      .reset-btn:hover, .reset-btn:focus {
+        background:#22b86b;
+        color:#fff;
+        border-color:#22b86b;
+      }
+    </style>
+  </div>
+  <table id="recommendTable">
+    <thead>
+      <tr>
+        <th style="width:110px; cursor:pointer" id="dateSortHeader">날짜 <span id="dateSortIcon">▼</span></th>
+        <th style="width:88px; cursor:pointer" id="riskSortHeader">위험도 <span id="riskSortIcon">▼</span></th>
+        <th style="width:120px">추천 조치</th>
+        <th style="width:100px">카테고리</th>
+        <th>리뷰 내용</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in recommended_responses %}
+        <tr class="review-set" data-review-id="{{ row.id }}">
+          <td>{{ row.date }}</td>
+          <td>
+            <span class="risk-chip {% if row.risk_score_norm >= 70 %}risk-high{% elif row.risk_score_norm >= 30 %}risk-medium{% else %}risk-low{% endif %}">
+              {{ row.risk_score_norm }}
+            </span>
+          </td>
+          <td>
+            <span class="method-pill pill-{{ row.method }}">
+              {{ method_labels[row.method] }}
+            </span>
+          </td>
+          <td>{{ row.category }}</td>
+          <td>{{ row.review_text }}</td>
+        </tr>
+        <tr class="review-keywords-row" data-review-id="{{ row.id }}">
+          <td colspan="5">
+            <span class="review-keywords" style="font-size:0.85em; color:#888; letter-spacing:0.03em;">
+              {% if row.keywords %}
+                키워드: {{ row.keywords | join(", ") }}
+              {% else %}
+                &nbsp;
+              {% endif %}
+            </span>
+          </td>
+        </tr>
+        <tr class="review-reply-row" data-review-id="{{ row.id }}">
+          <td colspan="5">
+            <span class="review-keywords" style="font-style:italic; color:#3b3b3b;">
+              AI 자동 답변: {{ row.suggested_reply or '(자동 답변 없음)' }}
+            </span>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <script>
+    // 위험도 정렬 (세트 단위)
+    let riskAsc = false;
+    const table = document.getElementById('recommendTable');
+    const riskHeader = document.getElementById('riskSortHeader');
+    const riskSortIcon = document.getElementById('riskSortIcon');
+    riskHeader.addEventListener('click', function() {
+      const tbody = table.tBodies[0];
+      // 모든 리뷰 세트 추출
+      const sets = [];
+      const rows = Array.from(tbody.querySelectorAll('tr.review-set'));
+      rows.forEach(row => {
+        const reviewId = row.getAttribute('data-review-id');
+        const setRows = [
+          row,
+          tbody.querySelector(`tr.review-keywords-row[data-review-id="${reviewId}"]`),
+          tbody.querySelector(`tr.review-reply-row[data-review-id="${reviewId}"]`)
+        ];
+        sets.push(setRows);
+      });
+      // 위험도 기준 정렬
+      sets.sort((a, b) => {
+        const riskA = parseFloat(a[0].querySelector('td:nth-child(2) span').innerText.trim()) || 0;
+        const riskB = parseFloat(b[0].querySelector('td:nth-child(2) span').innerText.trim()) || 0;
+        return riskAsc ? riskA - riskB : riskB - riskA;
+      });
+      riskAsc = !riskAsc;
+      riskSortIcon.textContent = riskAsc ? '▲' : '▼';
+      sets.forEach(setRows => setRows.forEach(tr => tbody.appendChild(tr)));
+    });
+    // 날짜 정렬 (세트 단위)
+    let dateAsc = false;
+    const dateHeader = document.getElementById('dateSortHeader');
+    const dateSortIcon = document.getElementById('dateSortIcon');
+    dateHeader.addEventListener('click', function() {
+      const tbody = table.tBodies[0];
+      const sets = [];
+      const rows = Array.from(tbody.querySelectorAll('tr.review-set'));
+      rows.forEach(row => {
+        const reviewId = row.getAttribute('data-review-id');
+        const setRows = [
+          row,
+          tbody.querySelector(`tr.review-keywords-row[data-review-id="${reviewId}"]`),
+          tbody.querySelector(`tr.review-reply-row[data-review-id="${reviewId}"]`)
+        ];
+        sets.push(setRows);
+      });
+      sets.sort((a, b) => {
+        const dateA = new Date(a[0].querySelector('td').innerText.trim());
+        const dateB = new Date(b[0].querySelector('td').innerText.trim());
+        return dateAsc ? dateA - dateB : dateB - dateA;
+      });
+      dateAsc = !dateAsc;
+      dateSortIcon.textContent = dateAsc ? '▲' : '▼';
+      sets.forEach(setRows => setRows.forEach(tr => tbody.appendChild(tr)));
+    });
+    // 필터링 (세트 단위)
+    // 대응방법별/카테고리별 필터
+    document.getElementById('methodFilter').addEventListener('change', filterTableSets);
+    document.getElementById('categoryFilter').addEventListener('change', filterTableSets);
+    document.getElementById('resetFiltersBtn').addEventListener('click', function() {
+      document.getElementById('methodFilter').value = 'all';
+      document.getElementById('categoryFilter').value = 'all';
+      filterTableSets();
+    });
+
+    function filterTableSets() {
+      const methodValue = document.getElementById('methodFilter').value;
+      const categoryValue = document.getElementById('categoryFilter').value;
+      const tbody = table.tBodies[0];
+      const sets = [];
+      const rows = Array.from(tbody.querySelectorAll('tr.review-set'));
+      rows.forEach(row => {
+        const reviewId = row.getAttribute('data-review-id');
+        const setRows = [
+          row,
+          tbody.querySelector(`tr.review-keywords-row[data-review-id="${reviewId}"]`),
+          tbody.querySelector(`tr.review-reply-row[data-review-id="${reviewId}"]`)
+        ];
+        sets.push(setRows);
+      });
+      sets.forEach(setRows => {
+        const method = setRows[0].getAttribute('data-method');
+        const category = setRows[0].querySelector('td:nth-child(4)').innerText.trim();
+        const show = ( (methodValue === 'all' || method === methodValue) && (categoryValue === 'all' || category === categoryValue) );
+        setRows.forEach(tr => tr.style.display = show ? '' : 'none');
+      });
+    }
+
+    // 워드클라우드 생성 (키워드 집계)
+    window.addEventListener('DOMContentLoaded', function() {
+      const keywordSpans = document.querySelectorAll('.review-keywords-row .review-keywords');
+      const keywordCounts = {};
+      keywordSpans.forEach(span => {
+        const text = span.textContent.replace('키워드:', '').trim();
+        if (!text) return;
+        text.split(',').forEach(word => {
+          const w = word.trim();
+          if (!w) return;
+          keywordCounts[w] = (keywordCounts[w]||0) + 1;
+        });
+      });
+      const wordCloudList = Object.entries(keywordCounts).map(([word, count]) => [word, count*10+20]);
+      if (wordCloudList.length > 0 && window.WordCloud) {
+        // 다채로운 색상 팔레트
+        const palette = ['#2ED47A', '#4B9EFF', '#F7B500', '#FF6B6B', '#8B54FF', '#FF9F1C', '#00B8A9', '#FF61A6', '#3B3B3B', '#FFB4A2'];
+        WordCloud(document.getElementById('wordCloud'), {
+          list: wordCloudList,
+          gridSize: 14,
+          weightFactor: 2.5,
+          fontFamily: 'NanumSquare, sans-serif',
+          color: function(word, weight, fontSize, distance, theta) {
+            // 단어별로 팔레트에서 순환 또는 랜덤 색상
+            const idx = Math.abs(word.split('').reduce((a,c)=>a+c.charCodeAt(0),0)) % palette.length;
+            return palette[idx];
+          },
+          backgroundColor: 'rgba(0,0,0,0)',
+          rotateRatio: 0.2,
+          minRotation: -0.2,
+          maxRotation: 0.2,
+          drawOutOfBound: false,
+        });
+      }
+    });
+  </script>
+{% endif %}
+
+<!-- ────────────────────────────────────────────────
+     E.  세일즈 배너
+──────────────────────────────────────────────────── -->
+{% if metrics %}
+  <div class="banner">
+    <h3>별점을 지킬 준비 되셨나요?</h3>
+    <p>
+      <strong>20 분 무료 상담</strong>을 예약하고<br>
+      <b>추가 30 % 할인 쿠폰</b>도 받아가세요!
+    </p>
+    <a href="https://cal.com/x-review-lab/20min-teardown" target="_blank"
+       class="banner-btn">상담 예약하기 →</a>
+  </div>
+{% endif %}
+
+{% endblock %}

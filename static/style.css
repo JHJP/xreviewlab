@@ -1,0 +1,248 @@
+/* ────────────────────────────────────────────────
+   X Review Lab · Global styles
+   Brand palette → Indigo #5C3BFF · Emerald #2ED47A
+───────────────────────────────────────────────── */
+:root{
+  --clr-indigo:  #5C3BFF;
+  --clr-indigo-d: #4328d9;
+  --clr-emerald: #2ED47A;
+  --clr-emerald-d: #1e9b56;
+  --clr-bg:      #f8f9fb;
+  --clr-card:    #ffffff;
+  --clr-text:    #212529;
+  --radius:      10px;
+  --shadow-s:    0 1px 4px rgba(0,0,0,.08);
+  --shadow-m:    0 4px 18px rgba(0,0,0,.10);
+  --transition:  .25s ease;
+  font-size:     16px;
+  font-family:  "Pretendard","Apple SD Gothic Neo","Helvetica Neue",sans-serif;
+}
+*{box-sizing:border-box;padding:0;margin:0}
+body{
+  background:var(--clr-bg);
+  color:var(--clr-text);
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+.container{max-width:1040px;padding:2rem;margin:auto}
+
+/* Headings & CTA -----------------------------------------------------------*/
+h1,h2,h3{font-weight:700;color:var(--clr-indigo-d);margin-bottom:.4em}
+h1{font-size:2rem} h2{font-size:1.45rem} h3{font-size:1.25rem}
+.tagline{margin:-.75rem 0 2rem;color:#5c5c6b}
+
+/* Buttons ------------------------------------------------------------------*/
+button,
+.banner-btn{
+  appearance:none;
+  border:none;
+  background:var(--clr-indigo);
+  color:#fff;
+  padding:.75rem 1.5rem;
+  border-radius:var(--radius);
+  font-weight:600;
+  cursor:pointer;
+  transition:var(--transition);
+}
+button:hover,
+.banner-btn:hover{background:var(--clr-indigo-d); transform:translateY(-2px)}
+button:disabled{opacity:.55;cursor:progress}
+
+/* Cards & grids ------------------------------------------------------------*/
+.card, .metric-card, .banner{
+  background:var(--clr-card);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow-s);
+  padding:1.5rem;
+  margin-bottom:1.5rem;
+}
+.metric-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:1rem;
+}
+.metric-value{display:block;font-size:1.5rem;font-weight:700;margin-top:.2em}
+.metric-note{font-size:.8rem;color:#666}
+
+/* Inputs -------------------------------------------------------------------*/
+label{display:block;font-weight:600;margin:.9rem 0 .35rem}
+input[type="number"],
+input[type="text"]{
+  width:100%;
+  padding:.5rem .75rem;
+  border:1px solid #d0d7de;
+  border-radius:var(--radius);
+  transition:var(--transition);
+}
+input:focus{outline:none;border-color:var(--clr-indigo)}
+.methods-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:.5rem .75rem;
+}
+.checkbox{
+  display:flex;align-items:center;gap:.45rem;
+  background:#eef0ff;border-radius:var(--radius);padding:.4rem .6rem;
+  transition:var(--transition);cursor:pointer;font-size:.9rem
+}
+.checkbox:hover{background:#e0e4ff}
+.checkbox input{accent-color:var(--clr-indigo)}
+
+/* Table --------------------------------------------------------------------*/
+table{width:100%;border-collapse:collapse;font-size:.95rem}
+th,td{padding:.65rem .75rem;text-align:left;border-bottom:1px solid #e9ecef}
+thead{background:#f1f4ff}
+tr:hover td{background:#f3f8ff !important;}
+
+/* Chips & pills ------------------------------------------------------------*/
+.risk-chip,.method-pill{
+  display:inline-block;padding:.2rem .55rem;border-radius:50px;
+  font-size:.75rem;font-weight:600;color:#fff;text-transform:uppercase;
+}
+.risk-chip {
+  font-weight: 700;
+  font-size: 1.05em;
+  padding: 0.3em 1em;
+  border-radius: 999px;
+  display: inline-block;
+  min-width: 44px;
+  text-align: center;
+}
+.risk-low    { background: #2ED47A; color: #fff; }
+.risk-medium { background: #FFC107; color: #333; }
+.risk-high   { background: #FF4D4F; color: #fff; }
+
+.method-pill {
+  font-weight: 700;
+  padding: 0.28em 1.1em;
+  border-radius: 999px;
+  font-size: 1em;
+  display: inline-block;
+  min-width: 74px;
+  text-align: center;
+}
+.risk-low   {background:var(--clr-emerald)}
+.risk-medium{background:#FFC107;color:#333}
+.risk-high  {background:#ff4d4f}
+.pill-text_reply     {background:var(--clr-indigo)}
+.pill-chat_followup  {background:#6f42c1}
+.pill-phone_call     {background:#d63384}
+.pill-discount_coupon{background:#0d6efd}
+.pill-vip_apology    {background:#fd7e14}
+
+/* Overlay – welcome & loading ---------------------------------------------*/
+.overlay{
+  position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(33,37,41,.72);z-index:1000;
+}
+.overlay-card{
+  background:var(--clr-card);padding:2rem 2.5rem;border-radius:var(--radius);
+  width:90%;max-width:420px;text-align:center;box-shadow:var(--shadow-m);
+}
+#loading-overlay .spinner{
+  width:54px;height:54px;border:6px solid #fff;border-top-color:transparent;
+  border-radius:50%;animation:spin 1s linear infinite;margin-bottom:1.5rem
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Banner / CTA -------------------------------------------------------------*/
+.banner{
+  text-align:center;box-shadow:var(--shadow-m);display:flex;flex-direction:column;
+  align-items:center;gap:.6rem
+}
+.banner-btn{display:inline-block}
+
+/* Responsive tweaks --------------------------------------------------------*/
+@media(max-width:600px){
+  .container{padding:1.25rem}
+  h1{font-size:1.55rem}
+}
+
+/* ── Tutorial overlay bits ───────────────────────────────────────────*/
+.tutorial-tip{
+  position:absolute;max-width:260px;background:#fff;border-radius:var(--radius);
+  box-shadow:var(--shadow-m);padding:1rem;z-index:2050;font-size:.9rem;
+}
+.tutorial-tip[data-arrow="left"]::after,
+.tutorial-tip[data-arrow="right"]::after{
+  content:"";position:absolute;top:18px;border:8px solid transparent;
+}
+.tutorial-tip[data-arrow="left"]::after { left:-16px;  border-right-color:#fff; }
+.tutorial-tip[data-arrow="right"]::after{ right:-16px; border-left-color:#fff; }
+.tutorial-tip button{margin-top:.6rem;font-size:.8rem;font-weight:600}
+
+@keyframes pulse{
+  0%{box-shadow:0 0 0 0 rgba(92,59,255,.6)}
+  70%{box-shadow:0 0 0 6px rgba(92,59,255,0)}
+  100%{box-shadow:0 0 0 0 rgba(92,59,255,0)}
+}
+.tutorial-highlight{
+  position:relative;z-index:2000;border-radius:var(--radius);
+  animation:pulse 1.5s infinite;
+}
+
+/* ───────────────────────────────────────────────
+   Brand logo & header
+────────────────────────────────────────────────*/
+/* ── Brand logo & header ───────────────────────────────────────────*/
+:root{
+  --logo-h-desktop: 72px;   /* ⬅︎ increase here if you want even larger */
+  --logo-h-mobile : 52px;
+}
+
+.review-keywords-row {
+  background: #fafbfc;
+}
+.review-keywords {
+  font-size: 0.85em;
+  color: #888;
+  letter-spacing: 0.03em;
+}
+
+.site-header{
+  width:100%;
+  padding:1rem 0;                 /* vertical breathing room   */
+  display:flex;
+  justify-content:center;         /* centre in wide viewports  */
+  box-shadow:0 1px 4px rgba(0,0,0,.04);
+  background:#fff;                /* keeps indigo pop on scroll*/
+}
+
+.logo-link{display:inline-flex;align-items:center;text-decoration:none}
+.logo{
+  height:var(--logo-h-desktop);
+  width:auto;
+  max-width:320px;          /* never let it dominate */
+  object-fit:contain;
+  transition:filter .25s ease;
+}
+
+/* phone / small-tablet */
+@media(max-width:480px){
+  .logo{height:var(--logo-h-mobile);}
+}
+
+/* ─── Header polish ───────────────────────────────────────────────*/
+.site-header{
+  background:#fff;
+  /* subtle divider so the white bar feels intentional */
+  border-bottom:1px solid rgba(0,0,0,.06);
+  box-shadow:0 1px 4px rgba(0,0,0,.04);       /* keep the tiny shadow */
+}
+
+/* new constrained flex wrapper */
+.header-inner{
+  max-width:1040px;   /* same width as .container for perfect alignment */
+  margin:0 auto;
+  padding:0.5rem 1rem;
+  display:flex;
+  align-items:center; /* vertical centering */
+}
+
+/* logo tweaks – a touch smaller on desktop */
+@media(min-width:481px){
+  .logo{height:60px;}      /* was 72 px : removes empty vertical space   */
+}
+
+#plannerForm button[type="submit"]{ margin-top:15px; }
+#startTutorialBtn{ margin-top:20px; }
