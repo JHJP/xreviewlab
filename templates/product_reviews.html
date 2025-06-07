@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h1 style="margin-bottom:0.3em;">{{ product_name }}</h1>
+  <p class="tagline">고객의 소리 대응 서포터</p>
+
+  <div style="text-align:center; margin-bottom:1.5rem;">
+    {% if wordcloud_url %}
+      <img src="{{ wordcloud_url }}" alt="워드클라우드" style="max-width:100%; height:auto;">
+      <div style="font-size:0.95em; color:#888; margin-top:0.2em;">키워드 워드클라우드</div>
+    {% else %}
+      <div style="font-size:0.95em; color:#888; margin-top:0.2em;">키워드가 없습니다.</div>
+    {% endif %}
+  </div>
+
+  <table class="voc-table" style="width:100%; border-collapse:collapse;">
+    <thead>
+      <tr style="background:#f2f2f2;">
+        <th style="padding:0.7em; border:1px solid #ddd;">닉네임</th>
+        <th style="padding:0.7em; border:1px solid #ddd;">리뷰 업로드 날짜</th>
+        <th style="padding:0.7em; border:1px solid #ddd;">리뷰 장소</th>
+        <th style="padding:0.7em; border:1px solid #ddd;">위험수치</th>
+        <th style="padding:0.7em; border:1px solid #ddd;">리뷰 내용</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in reviews %}
+      <tr>
+        <td style="padding:0.7em; border:1px solid #ddd;">{{ r.nickname }}</td>
+        <td style="padding:0.7em; border:1px solid #ddd;">{{ r.date }}</td>
+        <td style="padding:0.7em; border:1px solid #ddd;">
+          <a href="{{ product_link }}" target="_blank">올리브영</a>
+        </td>
+        <td style="padding:0.7em; border:1px solid #ddd; color:#bbb;">추후 예정</td>
+        <td style="padding:0.7em; border:1px solid #ddd;">{{ r.content }}</td>
+      </tr>
+      <tr>
+        <td colspan="5" style="padding:0.4em 0.7em; border:1px solid #ddd; background:#fafafa; color:#888; font-size:0.97em; text-align:left;">
+          <span style="font-style:italic;">키워드: {{ r.keywords_str if r.keywords_str else '키워드 없음' }}</span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if reviews|length == 0 %}
+    <div style="text-align:center; color:#888; margin-top:2em;">리뷰가 없습니다.</div>
+  {% endif %}
+  <div style="margin-top:2em;">
+    <a href="{{ url_for('index') }}" class="banner-btn">← 상품 목록으로 돌아가기</a>
+  </div>
+{% endblock %}

@@ -75,7 +75,14 @@
     <tbody>
       {% for p in products %}
       <tr>
-        <td style="padding:0.7em; border:1px solid #ddd;">{{ p.name }}</td>
+        <td style="padding:0.7em; border:1px solid #ddd;">
+          {% set has_reviews = p.goodsNo is defined and p.goodsNo %}
+          {% if has_reviews %}
+            <a href="/product/{{ p.goodsNo }}/reviews" style="color:#2ED47A; font-weight:600; text-decoration:underline;">{{ p.name }}</a>
+          {% else %}
+            <span style="color:#bbb; cursor:not-allowed;">{{ p.name }}</span>
+          {% endif %}
+        </td>
         <td style="padding:0.7em; border:1px solid #ddd;">{{ p.rating }}</td>
         <td style="padding:0.7em; border:1px solid #ddd; color:#bbb;">추후 예정</td>
         <td style="padding:0.7em; border:1px solid #ddd; color:#bbb;">추후 예정</td>
@@ -194,7 +201,7 @@
           <td colspan="5">
             <span class="review-keywords" style="font-size:0.85em; color:#888; letter-spacing:0.03em;">
               {% if row.keywords %}
-                키워드: {{ row.keywords | join(", ") }}
+                불평 키워드: {{ row.keywords | join(", ") }}
               {% else %}
                 &nbsp;
               {% endif %}
