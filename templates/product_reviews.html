@@ -4,8 +4,117 @@
   <h1 style="margin-bottom:0.3em;">{{ product_name }}</h1>
   <p class="tagline">고객의 소리 대응 서포터</p>
 
-  <div style="text-align:center; margin-bottom:1.5rem;">
-    {% if wordcloud_url %}
+  <div style="text-align:center; margin-bottom:1.5rem; position:relative;">
+    {% if wordcloud_url and histogram_url %}
+      <div class="toggle-switch-wrap" style="position:absolute; right:38px; top:6px; z-index:2; display:flex; align-items:center; gap:8px;">
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-chart-switch">
+          <span class="slider"></span>
+        </label>
+        <span id="switch-label" style="font-size:1em; color:#888; font-weight:600;">워드클라우드</span>
+        <span id="chart-help" style="cursor:pointer; display:inline-flex; align-items:center;">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="14" cy="14" r="12" stroke="#222" stroke-width="2.2" fill="white"/>
+            <text x="14" y="19" text-anchor="middle" font-size="17" font-family="Arial" fill="#222">?</text>
+          </svg>
+          <span id="chart-tooltip" style="display:none; position:absolute; top:32px; right:-10px; background:#fff; color:#333; border:1px solid #d0d7de; border-radius:8px; padding:0.7em 1.1em; font-size:0.97em; box-shadow:0 4px 18px rgba(0,0,0,.10); white-space:nowrap; z-index:10; min-width:220px;">
+            OFF(워드클라우드): 버튼을 ON으로 바꾸면 키워드 히스토그램이 표시됩니다.
+          </span>
+        </span>
+      </div>
+      <img id="wordcloud-img" src="{{ wordcloud_url }}" alt="워드클라우드" style="max-width:100%; height:auto; display:block; margin:auto;">
+      <img id="histogram-img" src="{{ histogram_url }}" alt="키워드 히스토그램" style="max-width:100%; height:auto; display:none; margin:auto;">
+      <div id="chart-label" style="font-size:0.95em; color:#888; margin-top:0.2em;">키워드 워드클라우드</div>
+      <style>
+        .toggle-switch {
+          position: relative;
+          display: inline-block;
+          width: 54px;
+          height: 28px;
+        }
+        .toggle-switch input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+        }
+        .slider {
+          position: absolute;
+          cursor: pointer;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background-color: #e3eaf6;
+          border-radius: 28px;
+          transition: .3s;
+        }
+        .slider:before {
+          position: absolute;
+          content: "";
+          height: 22px;
+          width: 22px;
+          left: 4px;
+          bottom: 3px;
+          background-color: #fff;
+          border-radius: 50%;
+          transition: .3s;
+          box-shadow: 0 1px 4px rgba(0,0,0,.10);
+        }
+        .toggle-switch input:checked + .slider {
+          background-color: var(--clr-indigo, #5C3BFF);
+        }
+        .toggle-switch input:checked + .slider:before {
+          transform: translateX(26px);
+        }
+        .toggle-switch .slider {
+          box-shadow: 0 1px 4px rgba(0,0,0,.10);
+        }
+      </style>
+      <script>
+        const helpIcon = document.getElementById('chart-help');
+        const tooltip = document.getElementById('chart-tooltip');
+        const toggleSwitch = document.getElementById('toggle-chart-switch');
+        const switchLabel = document.getElementById('switch-label');
+        const wordcloudImg = document.getElementById('wordcloud-img');
+        const histogramImg = document.getElementById('histogram-img');
+        const chartLabel = document.getElementById('chart-label');
+
+        // 상태별 툴팁 텍스트
+        function updateTooltipText(isOn) {
+          if(isOn) {
+            tooltip.textContent = 'ON(히스토그램): 버튼을 OFF로 바꾸면 워드클라우드가 표시됩니다.';
+          } else {
+            tooltip.textContent = 'OFF(워드클라우드): 버튼을 ON으로 바꾸면 키워드 히스토그램이 표시됩니다.';
+          }
+        }
+        // 스위치 상태별 라벨
+        function updateSwitchLabel(isOn) {
+          switchLabel.textContent = isOn ? '히스토그램' : '워드클라우드';
+        }
+        // 차트 상태 전환
+        function updateChart(isOn) {
+          if(isOn) {
+            wordcloudImg.style.display = 'none';
+            histogramImg.style.display = 'block';
+            chartLabel.textContent = '키워드 히스토그램';
+          } else {
+            wordcloudImg.style.display = 'block';
+            histogramImg.style.display = 'none';
+            chartLabel.textContent = '키워드 워드클라우드';
+          }
+        }
+        // 초기 상태: OFF(워드클라우드)
+        toggleSwitch.checked = false;
+        updateTooltipText(false);
+        updateSwitchLabel(false);
+        updateChart(false);
+
+        toggleSwitch.addEventListener('change', function() {
+          updateTooltipText(this.checked);
+          updateSwitchLabel(this.checked);
+          updateChart(this.checked);
+        });
+        helpIcon.addEventListener('mouseenter', () => { tooltip.style.display = 'block'; });
+        helpIcon.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+      </script>
+    {% elif wordcloud_url %}
       <img src="{{ wordcloud_url }}" alt="워드클라우드" style="max-width:100%; height:auto;">
       <div style="font-size:0.95em; color:#888; margin-top:0.2em;">키워드 워드클라우드</div>
     {% else %}
