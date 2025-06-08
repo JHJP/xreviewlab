@@ -115,10 +115,8 @@ def index():
 
 # Blueprint 등록
 from routes.auto_reply import auto_reply_bp
-from routes.report import report_bp
 from routes.product import product_bp
 app.register_blueprint(auto_reply_bp)
-app.register_blueprint(report_bp)
 app.register_blueprint(product_bp)
 
 if __name__ == "__main__":
