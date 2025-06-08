@@ -141,8 +141,8 @@ def main():
         review_response.raise_for_status()
         reviews_json = review_response.json()
         
-        print(f"##### Goods Number: {goods_no} #####")
-        print(f"Goods info: {product}\n")
+        logging.info(f"##### Goods Number: {goods_no} #####")
+        logging.info(f"Goods info: {product}\n")
         items_processed += 1
 
         reviews_list = reviews_json.get("data", {}).get("list", [])
@@ -159,14 +159,14 @@ def main():
                 # user_nickname = user_info.get('userNickName', 'N/A')
                 # content = review.get('content', 'N/A')
                 
-                print(
+                logging.info(
                     # f"    Goods Number: {goods_no}\n"
                     # f"    Review Number: {review_no}\n"
                     # f"    Create Date: {create_date}\n"
                     # f"    Rating: {rating}\n"
                     # f"    User Nickname: {user_nickname}\n"
                     # f"    Content: {content}\n"
-                    print(f"{review}\n")
+                    logging.info(f"{review}\n")
                 )
 
 if __name__ == "__main__":

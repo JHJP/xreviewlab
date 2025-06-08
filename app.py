@@ -1,3 +1,8 @@
+import logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s'
+)
 import matplotlib
 matplotlib.use('Agg')
 from flask import Flask, render_template, request, session, jsonify
@@ -39,7 +44,7 @@ def get_progress():
 @app.route('/progress')
 def progress():
     current, total = get_progress()
-    print('[progress API]', current, total)  # 서버 콘솔에 직접 찍기
+    logging.info('[progress API] %s %s', current, total)  # 서버 콘솔에 직접 찍기
     return jsonify({'current': current, 'total': total})
 
 @app.route("/", methods=["GET", "POST"])
@@ -59,11 +64,11 @@ def index():
         olive_products_df = None
         if brand_name:
             try:
-                print("[TIMER] 크롤러 import 및 olive_get_brand_code 시작")
+                logging.info("[TIMER] 크롤러 import 및 olive_get_brand_code 시작")
                 t_crawler_start = time.time()
                 from crawlers.olive_crawler import olive_get_brand_code, olive_products_crawl
                 brand_code = olive_get_brand_code(brand_name)
-                print(f"[TIMER] olive_get_brand_code 완료: {time.time() - t_crawler_start:.2f}s")
+                logging.info(f"[TIMER] olive_get_brand_code 완료: {time.time() - t_crawler_start:.2f}s")
                 t_crawl_all_start = time.time()
                 # 브랜드의 모든 상품 가져오기
                 all_products = []
@@ -73,7 +78,7 @@ def index():
                 if all_products:
                     import pandas as pd
                     total_products_df = pd.concat(all_products, ignore_index=True)
-                print(f"[TIMER] olive_products_crawl 완료: {time.time() - t_crawl_all_start:.2f}s")
+                logging.info(f"[TIMER] olive_products_crawl 완료: {time.time() - t_crawl_all_start:.2f}s")
                 t_loop_start = time.time()
                 # 전체 상품 정보 저장
                 # 상품별 damage 총합 계산 (CSV가 있으면 활용)
@@ -96,18 +101,18 @@ def index():
                         'platform': row['platform'],
                         'damage_sum': damage_sum
                     })
-                print(f"[TIMER] 상품 반복문 완료: {time.time() - t_loop_start:.2f}s")
+                logging.info(f"[TIMER] 상품 반복문 완료: {time.time() - t_loop_start:.2f}s")
             except Exception as e:
-                print(f"[ERROR] 브랜드 코드 추출 실패: {e}")
+                logging.error(f"[ERROR] 브랜드 코드 추출 실패: {e}")
         else:
             # 브랜드명 없이 전체 상품 fallback 크롤링
             try:
-                print("[TIMER] fallback: olive_products_crawl(None) 전체 상품 크롤링 시작")
+                logging.info("[TIMER] fallback: olive_products_crawl(None) 전체 상품 크롤링 시작")
                 from crawlers.olive_crawler import olive_products_crawl
                 olive_products_df = olive_products_crawl(None, limit=10)
                 olive_products_df["platform"] = "olive"
                 total_products_df = olive_products_df
-                print(f"[TIMER] fallback: olive_products_crawl(None) 완료")
+                logging.info(f"[TIMER] fallback: olive_products_crawl(None) 완료")
                 t_loop_start = time.time()
                 products = []
                 for _, row in total_products_df.iterrows():
@@ -119,9 +124,9 @@ def index():
                         'platform': row['platform'],
                         'damage_sum': None
                     })
-                print(f"[TIMER] fallback 상품 반복문 완료: {time.time() - t_loop_start:.2f}s")
+                logging.info(f"[TIMER] fallback 상품 반복문 완료: {time.time() - t_loop_start:.2f}s")
             except Exception as e:
-                print(f"[ERROR] fallback 전체상품 크롤링 실패: {e}")
+                logging.error(f"[ERROR] fallback 전체상품 크롤링 실패: {e}")
         session['total_products'] = products
         session['olive_products_df'] = olive_products_df.to_dict() if olive_products_df is not None else None
         # ---- 전체 상품 리뷰 수집 및 합치기 ----
@@ -145,14 +150,14 @@ def index():
                         reviews_df["prd_platform"] = platform
                         all_reviews.append(reviews_df)
             except Exception as e:
-                print(f"[ERROR] 리뷰 수집 실패: goodsNo={goodsNo}, error={e}")
+                logging.error(f"[ERROR] 리뷰 수집 실패: goodsNo={goodsNo}, error={e}")
         if all_reviews:
             total_brand_reviews_df = pd.concat(all_reviews, ignore_index=True)
             total_brand_reviews_df.to_csv('total_brand_reviews_df.csv', index=False, encoding='utf-8-sig')
-            print(f"[INFO] total_brand_reviews_df.csv 저장 완료: {len(total_brand_reviews_df)}건")
+            logging.info(f"[INFO] total_brand_reviews_df.csv 저장 완료: {len(total_brand_reviews_df)}건")
         else:
-            print("[INFO] 수집된 리뷰 없음. total_brand_reviews_df.csv 미생성")
-        print(f"[TIMER] 전체 POST 처리 완료: {time.time() - t_post_start:.2f}s")
+            logging.info("[INFO] 수집된 리뷰 없음. total_brand_reviews_df.csv 미생성")
+        logging.info(f"[TIMER] 전체 POST 처리 완료: {time.time() - t_post_start:.2f}s")
         return render_template(
             "index.html",
             products=products,
@@ -203,4 +208,4 @@ app.register_blueprint(auto_reply_bp)
 app.register_blueprint(product_bp)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)

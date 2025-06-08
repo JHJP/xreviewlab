@@ -1,4 +1,5 @@
 import re, math, time, random, requests
+import logging
 from bs4 import BeautifulSoup
 import pandas as pd
 from selenium import webdriver
@@ -153,9 +154,9 @@ def olive_reviews_crawl(goods_nos, limit="all"):
     if isinstance(goods_nos, (list, tuple, set)):
         all_reviews = []
         for goods_no in goods_nos:
-            print(f"크롤링: {goods_no}")
+            logging.info(f"크롤링: {goods_no}")
             olive_reviews_df = olive_reviews_crawl(goods_no, limit=limit)
-            print(f"{goods_no} 리뷰 수집 결과: {len(olive_reviews_df)}개")
+            logging.info(f"{goods_no} 리뷰 수집 결과: {len(olive_reviews_df)}개")
             all_reviews.append(olive_reviews_df)
         if all_reviews:
             total_reviews_df = pd.concat(all_reviews, ignore_index=True)
@@ -197,7 +198,7 @@ def olive_reviews_crawl(goods_nos, limit="all"):
                     found = True
                     break
             if not found:
-                print(f"{score} 체크박스 없음")
+                logging.info(f"{score} 체크박스 없음")
         # 4. 적용 버튼 클릭
         apply_btn = wait.until(EC.element_to_be_clickable((By.ID, "btnFilterConfirm")))
         if "적용" in apply_btn.text:
@@ -279,7 +280,7 @@ def olive_reviews_crawl(goods_nos, limit="all"):
 
             except Exception as e:
                 results.extend(reviews)
-                print(f"리뷰 추출 실패: {e}")
+                logging.info(f"리뷰 추출 실패: {e}")
                 break
             # 6. robust 페이지네이션 처리
             paging_area = driver.find_element(By.XPATH, '//*[@id="gdasContentsArea"]//div[contains(@class, "pageing")]')
@@ -327,10 +328,10 @@ if __name__ == "__main__":
     prod_limit = 3  # 원하는 상품 개수, 'all'이면 전체
     review_limit = 5 # 원하는 리뷰 개수, 'all'이면 전체
     olive_products_df = olive_products_crawl(brand_code, limit=prod_limit)
-    print(f"총 {len(olive_products_df)}개")
-    print(olive_products_df)
+    logging.info(f"총 {len(olive_products_df)}개")
+    logging.info(olive_products_df)
     # 리뷰 크롤링 예시 (한 번에 처리)
     goods_nos = olive_products_df['goodsNo'].tolist()
     olive_total_reviews_df = olive_reviews_crawl(goods_nos, limit=review_limit)
-    print(f"총 리뷰 수집 결과: {len(olive_total_reviews_df)}개")
-    print(olive_total_reviews_df)
+    logging.info(f"총 리뷰 수집 결과: {len(olive_total_reviews_df)}개")
+    logging.info(olive_total_reviews_df)

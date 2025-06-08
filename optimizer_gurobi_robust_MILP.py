@@ -307,9 +307,9 @@ if __name__ == "__main__":
             alpha_uncertainty=args.alpha_uncertainty,
             want_alpha_scan=args.alpha_scan
         )
-        # print(json.dumps(rec.to_dict("records"), ensure_ascii=False, indent=2))
-        print("\n# Robust-sensitivity")
-        print(json.dumps(sens, indent=2))
+        # logging.info(json.dumps(rec.to_dict("records"), ensure_ascii=False, indent=2))
+        logging.info("\n# Robust-sensitivity")
+        logging.info(json.dumps(sens, indent=2))
     except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+        logging.info(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

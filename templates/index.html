@@ -1,28 +1,13 @@
-{# templates/index.html #}
 {% extends "base.html" %}
-
-{# 대응 방법 한글 라벨 매핑 -------------------------------------- #}
-{% set method_labels = {
-  'text_reply'     : '댓글로 답장',
-  'chat_followup'  : '채팅방 답장',
-  'phone_call'     : '전화하기',
-  'discount_coupon': '쿠폰 보내기',
-  'vip_apology'    : 'VIP 사과'
-} %}
-
 {% block content %}
 
-<!-- ────────────────────────────────────────────────
-     A.  첫 화면 / 온보딩 오버레이
-──────────────────────────────────────────────────── -->
-<div id="welcome-overlay" class="overlay"
-     {% if not tutorial_mode %}style="display:none"{% endif %}>
+<div id="welcome-overlay" class="overlay" style="display:none">
   <div class="overlay-card">
     <h1>엑스 리뷰 랩에 오신 걸<br> 환영해요 👋</h1>
     <p>
       우리 서비스는 <strong>고객의 소리(VoC)</strong>가 <br>
       <strong>생산공정</strong>에 반영되는 효율을 높여줘요.<br>
-      아래 버튼을 누르면<br> <strong>3분</strong> 만에 <strong>샘플</strong> 화면을 볼 수 있어요!
+      아래 버튼을 누르면 <strong>3분</strong> 만에 <strong>샘플</strong> 화면을 볼 수 있어요!
     </p>
     <button id="startTutorialBtn">시작하기</button>
   </div>
@@ -31,18 +16,13 @@
 <h1>고객의 소리 대응 서포터</h1>
 <p class="tagline">AI가 <strong>가장 중요한 고객의 소리</strong>부터 해결합니다.</p>
 
-<!-- ────────────────────────────────────────────────
-     B.  입력 카드
-──────────────────────────────────────────────────── -->
 <div class="card">
   <form method="POST" enctype="multipart/form-data" id="plannerForm">
     <label for="brand_name">브랜드 이름을 입력하세요</label>
     <input type="text" name="brand_name" id="brand_name" placeholder="예: 토리든" required>
-
     <label for="brand_url">자사몰 URL을 입력하세요</label>
     <input type="text" name="brand_url" id="brand_url" placeholder="예: https://www.torriden.com/" required>
-
-    <button type="button" id="vocListenBtn">VoC 듣기</button>
+    <button type="button" id="vocListenBtn" style="margin-top:1em;">VoC 듣기</button>
     <div id="loading-spinner" style="display:none; text-align:center; margin-top:1em;">
       <div class="spinner" style="display:inline-block; width:40px; height:40px; border:4px solid #eee; border-top:4px solid #22b86b; border-radius:50%; animation:spin 1s linear infinite;"></div>
       <div style="margin-top:0.5em; color:#22b86b; font-weight:600;">상품 정보를 불러오는 중...</div>
@@ -57,13 +37,8 @@
         const brandUrl = document.getElementById('brand_url').value;
         fetch('/voc_listen', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          },
-          body: new URLSearchParams({
-            brand_name: brandName,
-            brand_url: brandUrl
-          })
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ brand_name: brandName, brand_url: brandUrl })
         }).then(resp => {
           if (resp.redirected) {
             window.location.href = resp.url;
@@ -76,9 +51,6 @@
   </form>
 </div>
 
-<!-- ────────────────────────────────────────────────
-     C.  ROI 대시보드
-──────────────────────────────────────────────────── -->
 {% if products %}
   <h2 style="margin:2rem 0 1rem;">상품별 VoC 요약</h2>
   <table class="voc-table" style="width:100%; border-collapse:collapse;">
@@ -104,9 +76,6 @@
         <td style="padding:0.7em; border:1px solid #ddd;">{{ p.rating }}</td>
         <td style="padding:0.7em; border:1px solid #ddd;">{{ p.damage_sum if p.damage_sum is not none else '-' }}</td>
 
-      </tr>
-      <tr>
-        <td colspan="3" style="padding:0.7em; border:1px solid #ddd;">추후 예정</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -146,157 +115,38 @@
       const text = await res.text();
       alert(text);
     };
-  </script>
-  {% if wordcloud_url %}
-    <div style="text-align:center; margin-bottom:1.5rem;">
-      <img src="{{ wordcloud_url }}" alt="워드클라우드" style="max-width:100%; height:auto;">
-      <div style="font-size:0.95em; color:#888; margin-top:0.2em;">전체 리뷰 키워드 요약</div>
-    </div>
-  {% endif %}
-  <!-- 추천 조치별(대응 방법별) 필터 드롭다운 -->
-  <div class="filter-bar" style="display:flex; flex-wrap:wrap; gap:1.5em; align-items:center; margin-bottom:1.2em;">
-    <label for="methodFilter" style="font-weight:600; margin-right:0.5em;">대응 방법</label>
-    <select id="methodFilter" style="min-width:110px; padding:0.4em 1.2em; border-radius:6px; border:1px solid #bbb; font-size:1em;">
-      <option value="all">전체</option>
-      {% for m in methods %}
-        <option value="{{ m }}">{{ method_labels[m] }}</option>
-      {% endfor %}
-    </select>
-    <label for="categoryFilter" style="font-weight:600; margin-left:1.5em; margin-right:0.5em;">카테고리</label>
-    <select id="categoryFilter" style="min-width:90px; padding:0.4em 1.2em; border-radius:6px; border:1px solid #bbb; font-size:1em;">
-      <option value="all">전체</option>
-      <option value="품질">품질</option>
-      <option value="가격">가격</option>
-      <option value="서비스">서비스</option>
-      <option value="기타">기타</option>
-    </select>
-    <button type="button" id="resetFiltersBtn" class="reset-btn">필터 초기화</button>
-    <style>
-      .reset-btn {
-        margin-left:1.5em;
-        padding:0.35em 1em;
-        border-radius:6px;
-        border:1px solid #2ED47A;
-        background:#2ED47A;
-        color:#fff;
-        font-size:0.97em;
-        font-weight:600;
-        cursor:pointer;
-        transition: background 0.18s, color 0.18s;
-      }
-      .reset-btn:hover, .reset-btn:focus {
-        background:#22b86b;
-        color:#fff;
-        border-color:#22b86b;
-      }
-    </style>
-  </div>
-  <table id="recommendTable">
-    <thead>
-      <tr>
-        <th style="width:110px; cursor:pointer" id="dateSortHeader">날짜 <span id="dateSortIcon">▼</span></th>
-        <th style="width:88px; cursor:pointer" id="riskSortHeader">위험도 <span id="riskSortIcon">▼</span></th>
-        <th style="width:120px">추천 조치</th>
-        <th style="width:100px">카테고리</th>
-        <th>리뷰 내용</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in recommended_responses %}
-        <tr class="review-set" data-review-id="{{ row.id }}">
-          <td>{{ row.date }}</td>
-          <td>
-            <span class="risk-chip {% if row.risk_score_norm >= 70 %}risk-high{% elif row.risk_score_norm >= 30 %}risk-medium{% else %}risk-low{% endif %}">
-              {{ row.risk_score_norm }}
-            </span>
-          </td>
-          <td>
-            <span class="method-pill pill-{{ row.method }}">
-              {{ method_labels[row.method] }}
-            </span>
-          </td>
-          <td>{{ row.category }}</td>
-          <td>{{ row.review_text }}</td>
-        </tr>
-        <tr class="review-keywords-row" data-review-id="{{ row.id }}">
-          <td colspan="5">
-            <span class="review-keywords" style="font-size:0.85em; color:#888; letter-spacing:0.03em;">
-              {% if row.keywords %}
-                불평 키워드: {{ row.keywords | join(", ") }}
-              {% else %}
-                &nbsp;
-              {% endif %}
-            </span>
-          </td>
-        </tr>
-        <tr class="review-reply-row" data-review-id="{{ row.id }}">
-          <td colspan="5">
-            <span class="review-keywords" style="font-style:italic; color:#3b3b3b;">
-              AI 자동 답변: {{ row.suggested_reply or '(자동 답변 없음)' }}
-            </span>
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <script>
-    // 위험도 정렬 (세트 단위)
-    let riskAsc = false;
     const table = document.getElementById('recommendTable');
-    const riskHeader = document.getElementById('riskSortHeader');
-    const riskSortIcon = document.getElementById('riskSortIcon');
-    riskHeader.addEventListener('click', function() {
+    let dateAsc = false, riskAsc = false;
+    document.getElementById('dateSortHeader').addEventListener('click', function() {
       const tbody = table.tBodies[0];
-      // 모든 리뷰 세트 추출
-      const sets = [];
       const rows = Array.from(tbody.querySelectorAll('tr.review-set'));
-      rows.forEach(row => {
-        const reviewId = row.getAttribute('data-review-id');
-        const setRows = [
-          row,
-          tbody.querySelector(`tr.review-keywords-row[data-review-id="${reviewId}"]`),
-          tbody.querySelector(`tr.review-reply-row[data-review-id="${reviewId}"]`)
-        ];
-        sets.push(setRows);
-      });
-      // 위험도 기준 정렬
+      const sets = rows.map(row => [row,
+        tbody.querySelector(`tr.review-keywords-row[data-review-id="${row.getAttribute('data-review-id')}"]`),
+        tbody.querySelector(`tr.review-reply-row[data-review-id="${row.getAttribute('data-review-id')}"]`)
+      ]);
       sets.sort((a, b) => {
-        const riskA = parseFloat(a[0].querySelector('td:nth-child(2) span').innerText.trim()) || 0;
-        const riskB = parseFloat(b[0].querySelector('td:nth-child(2) span').innerText.trim()) || 0;
-        return riskAsc ? riskA - riskB : riskB - riskA;
+        const d1 = a[0].children[0].textContent, d2 = b[0].children[0].textContent;
+        return dateAsc ? d1.localeCompare(d2) : d2.localeCompare(d1);
       });
-      riskAsc = !riskAsc;
-      riskSortIcon.textContent = riskAsc ? '▲' : '▼';
       sets.forEach(setRows => setRows.forEach(tr => tbody.appendChild(tr)));
-    });
-    // 날짜 정렬 (세트 단위)
-    let dateAsc = false;
-    const dateHeader = document.getElementById('dateSortHeader');
-    const dateSortIcon = document.getElementById('dateSortIcon');
-    dateHeader.addEventListener('click', function() {
-      const tbody = table.tBodies[0];
-      const sets = [];
-      const rows = Array.from(tbody.querySelectorAll('tr.review-set'));
-      rows.forEach(row => {
-        const reviewId = row.getAttribute('data-review-id');
-        const setRows = [
-          row,
-          tbody.querySelector(`tr.review-keywords-row[data-review-id="${reviewId}"]`),
-          tbody.querySelector(`tr.review-reply-row[data-review-id="${reviewId}"]`)
-        ];
-        sets.push(setRows);
-      });
-      sets.sort((a, b) => {
-        const dateA = new Date(a[0].querySelector('td').innerText.trim());
-        const dateB = new Date(b[0].querySelector('td').innerText.trim());
-        return dateAsc ? dateA - dateB : dateB - dateA;
-      });
       dateAsc = !dateAsc;
-      dateSortIcon.textContent = dateAsc ? '▲' : '▼';
-      sets.forEach(setRows => setRows.forEach(tr => tbody.appendChild(tr)));
+      document.getElementById('dateSortIcon').textContent = dateAsc ? '▲' : '▼';
     });
-    // 필터링 (세트 단위)
-    // 대응방법별/카테고리별 필터
+    document.getElementById('riskSortHeader').addEventListener('click', function() {
+      const tbody = table.tBodies[0];
+      const rows = Array.from(tbody.querySelectorAll('tr.review-set'));
+      const sets = rows.map(row => [row,
+        tbody.querySelector(`tr.review-keywords-row[data-review-id="${row.getAttribute('data-review-id')}"]`),
+        tbody.querySelector(`tr.review-reply-row[data-review-id="${row.getAttribute('data-review-id')}"]`)
+      ]);
+      sets.sort((a, b) => {
+        const r1 = a[0].children[1].textContent, r2 = b[0].children[1].textContent;
+        return riskAsc ? r1.localeCompare(r2) : r2.localeCompare(r1);
+      });
+      sets.forEach(setRows => setRows.forEach(tr => tbody.appendChild(tr)));
+      riskAsc = !riskAsc;
+      document.getElementById('riskSortIcon').textContent = riskAsc ? '▲' : '▼';
+    });
     document.getElementById('methodFilter').addEventListener('change', filterTableSets);
     document.getElementById('categoryFilter').addEventListener('change', filterTableSets);
     document.getElementById('resetFiltersBtn').addEventListener('click', function() {
@@ -304,7 +154,6 @@
       document.getElementById('categoryFilter').value = 'all';
       filterTableSets();
     });
-
     function filterTableSets() {
       const methodValue = document.getElementById('methodFilter').value;
       const categoryValue = document.getElementById('categoryFilter').value;
@@ -327,8 +176,6 @@
         setRows.forEach(tr => tr.style.display = show ? '' : 'none');
       });
     }
-
-    // 워드클라우드 생성 (키워드 집계)
     window.addEventListener('DOMContentLoaded', function() {
       const keywordSpans = document.querySelectorAll('.review-keywords-row .review-keywords');
       const keywordCounts = {};
@@ -343,7 +190,6 @@
       });
       const wordCloudList = Object.entries(keywordCounts).map(([word, count]) => [word, count*10+20]);
       if (wordCloudList.length > 0 && window.WordCloud) {
-        // 다채로운 색상 팔레트
         const palette = ['#2ED47A', '#4B9EFF', '#F7B500', '#FF6B6B', '#8B54FF', '#FF9F1C', '#00B8A9', '#FF61A6', '#3B3B3B', '#FFB4A2'];
         WordCloud(document.getElementById('wordCloud'), {
           list: wordCloudList,
@@ -351,7 +197,6 @@
           weightFactor: 2.5,
           fontFamily: 'NanumSquare, sans-serif',
           color: function(word, weight, fontSize, distance, theta) {
-            // 단어별로 팔레트에서 순환 또는 랜덤 색상
             const idx = Math.abs(word.split('').reduce((a,c)=>a+c.charCodeAt(0),0)) % palette.length;
             return palette[idx];
           },
@@ -366,9 +211,6 @@
   </script>
 {% endif %}
 
-<!-- ────────────────────────────────────────────────
-     E.  세일즈 배너
-──────────────────────────────────────────────────── -->
 {% if metrics %}
   <div class="banner">
     <h3>별점을 지킬 준비 되셨나요?</h3>
@@ -376,9 +218,24 @@
       <strong>20 분 무료 상담</strong>을 예약하고<br>
       <b>추가 30 % 할인 쿠폰</b>도 받아가세요!
     </p>
-    <a href="https://cal.com/x-review-lab/20min-teardown" target="_blank"
-       class="banner-btn">상담 예약하기 →</a>
+    <a href="https://cal.com/x-review-lab/20min-teardown" target="_blank" class="banner-btn">상담 예약하기 →</a>
   </div>
 {% endif %}
 
+<script>
+// welcome-overlay: only show on first visit
+(function() {
+  const overlay = document.getElementById('welcome-overlay');
+  const startBtn = document.getElementById('startTutorialBtn');
+  if (localStorage.getItem('xrl_welcome_shown') === 'yes') {
+    overlay.style.display = 'none';
+  } else {
+    overlay.style.display = '';
+  }
+  startBtn.addEventListener('click', function() {
+    localStorage.setItem('xrl_welcome_shown', 'yes');
+    overlay.style.display = 'none';
+  });
+})();
+</script>
 {% endblock %}
