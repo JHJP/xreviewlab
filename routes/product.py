@@ -21,10 +21,12 @@ def product_reviews(goodsNo):
         return redirect(url_for('index'))
     product_name = product_row['name']
     product_link = product_row['link']
+    product_rating = product_row['rating']
+    product_platform = product_row['platform']
     # 리뷰 데이터 가져오기
     all_reviews = []
-    olive_reviews_df = olive_reviews_crawl([goodsNo], limit=5)
-    olive_reviews_df["location"] = "올리브영"
+    if product_platform == "olive":
+        olive_reviews_df = olive_reviews_crawl([goodsNo], limit=5)
     all_reviews.append(olive_reviews_df)
     if all_reviews:
         total_reviews_df = pd.concat(all_reviews, ignore_index=True)
@@ -36,8 +38,10 @@ def product_reviews(goodsNo):
     total_reviews_df["keywords"] = total_reviews_df["content"].apply(extract_keywords_with_openai)
     keywords_all = [kw for kws in total_reviews_df["keywords"] for kw in kws]
     reviews = total_reviews_df.to_dict(orient="records")
-    total_reviews_df["link"] = product_link
-    total_reviews_df["prd_name"] = product_name 
+    total_reviews_df["prd_link"] = product_link
+    total_reviews_df["prd_name"] = product_name
+    total_reviews_df["prd_rating"] = product_rating
+    total_reviews_df["prd_platform"] = product_platform
     # 워드클라우드 및 히스토그램 생성
     wordcloud_url = None
     histogram_url = None

@@ -69,17 +69,25 @@ def index():
                 brand_code = olive_get_brand_code(brand_name)
                 print(f"[TIMER] olive_get_brand_code 완료: {time.time() - t_crawler_start:.2f}s")
                 t_crawl_all_start = time.time()
+                # 브랜드의 모든 상품 가져오기
+                all_products = []
                 olive_products_df = olive_products_crawl(brand_code, limit=3)
+                olive_products_df["platform"] = "olive"
+                all_products.append(olive_products_df)
+                if all_products:
+                    import pandas as pd
+                    total_products_df = pd.concat(all_products, ignore_index=True)
                 print(f"[TIMER] olive_products_crawl 완료: {time.time() - t_crawl_all_start:.2f}s")
                 t_loop_start = time.time()
                 # 전체 상품 정보 저장
-                for _, row in olive_products_df.iterrows():
+                for _, row in total_products_df.iterrows():
                     # 리뷰 없는 상품은 나중에 처리 위해 goodsNo도 저장
                     products.append({
                         'goodsNo': row['goodsNo'],
                         'name': row['name'],
                         'rating': row['rating'],
                         'link': row['link'] if 'link' in row else '',
+                        'platform': row['platform']
                     })
                 print(f"[TIMER] 상품 반복문 완료: {time.time() - t_loop_start:.2f}s")
             except Exception as e:
