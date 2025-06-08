@@ -1,17 +1,6 @@
 import matplotlib
 matplotlib.use('Agg')
-from flask import Flask, render_template, request, session, send_file, redirect, url_for, jsonify
-import pandas as pd
-
-# 추가: 워드클라우드 관련
-from collections import Counter
-import io, base64
-from wordcloud import WordCloud
-from konlpy.tag import Okt
-import matplotlib.pyplot as plt
-import os
-from dotenv import load_dotenv
-import openai
+from flask import Flask, render_template, request, session, jsonify
 
 # ───────────────────────────────────────────────────────────────
 # 📊  Brand-reputation research → ₩ per DAMAGE-UNIT
@@ -62,7 +51,6 @@ def index():
 
     # ── 2. skeletons for the template (stay None on plain GET)
     products = None
-    wordcloud_url = None
     total_products_df = None
 
     # ── 3. Handle the POST: run the optimiser & build the dashboard
