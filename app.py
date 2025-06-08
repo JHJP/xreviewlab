@@ -95,6 +95,37 @@ def index():
         # 세션에 상품/리뷰 데이터 임시 저장 (리뷰 없는 상품 비활성화 위해)
         session['total_products'] = products
         session['olive_products_df'] = olive_products_df.to_dict() if olive_products_df is not None else None
+
+        # ---- 전체 상품 리뷰 수집 및 합치기 ----
+        import pandas as pd
+        from crawlers.olive_crawler import olive_reviews_crawl
+        from review_utils import extract_keywords_with_openai
+        all_reviews = []
+        for prod in products:
+            goodsNo = prod['goodsNo']
+            platform = prod.get('platform', '')
+            try:
+                if platform == 'olive':
+                    reviews_df = olive_reviews_crawl([goodsNo], limit=5)
+                    if reviews_df is not None and not reviews_df.empty:
+                        # 리뷰 전처리 및 컬럼 추가 (product_reviews 참고)
+                        reviews_df["word_count"] = reviews_df["content"].str.split().apply(len)
+                        reviews_df["damage"] = 0.002*reviews_df["word_count"] + 0.219*reviews_df["photo_present"] + 0.279*reviews_df["top_rank_present"] + 0.279*reviews_df["badges_present"]
+                        reviews_df["keywords"] = reviews_df["content"].apply(extract_keywords_with_openai)
+                        reviews_df["prd_link"] = prod.get('link', '')
+                        reviews_df["prd_name"] = prod.get('name', '')
+                        reviews_df["rating"] = prod.get('rating', '')
+                        reviews_df["prd_platform"] = platform
+                        all_reviews.append(reviews_df)
+            except Exception as e:
+                print(f"[ERROR] 리뷰 수집 실패: goodsNo={goodsNo}, error={e}")
+        if all_reviews:
+            total_brand_reviews_df = pd.concat(all_reviews, ignore_index=True)
+            total_brand_reviews_df.to_csv('total_brand_reviews_df.csv', index=False, encoding='utf-8-sig')
+            print(f"[INFO] total_brand_reviews_df.csv 저장 완료: {len(total_brand_reviews_df)}건")
+        else:
+            print("[INFO] 수집된 리뷰 없음. total_brand_reviews_df.csv 미생성")
+
         print(f"[TIMER] 전체 POST 처리 완료: {time.time() - t_post_start:.2f}s")
         return render_template(
             "index.html",
