@@ -104,7 +104,7 @@ def parse_products(html):
         rt = li.select_one(".rating .point")
         rating = float(rt.text) if rt else None
 
-        items.append({"goodsNo": goods_no, "name": name, "rating": rating, "ink": a["href"]})
+        items.append({"goodsNo": goods_no, "name": name, "rating": rating, "link": a["href"]})
     return items
 
 def crawl_brand_all(brand, rows=24,
@@ -146,7 +146,6 @@ def crawl_brand_all(brand, rows=24,
     return pd.DataFrame(data if limit == "all" else data[:limit])
 
 # ───────────────────────── 리뷰 크롤러 함수 ─────────────────────────
-from langchain_core.documents import Document
 
 def crawl_reviews_for_goods(goods_nos, limit="all"):
     import pandas as pd
