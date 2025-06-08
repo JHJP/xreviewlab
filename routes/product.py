@@ -6,43 +6,40 @@ product_bp = Blueprint('product', __name__)
 
 @product_bp.route("/product/<goodsNo>/reviews")
 def product_reviews(goodsNo):
-    # 상품 데이터프레임 불러오기
-    total_products = session.get('total_products')
-    olive_products_df_dict = session.get('olive_products_df')
-    if not total_products or not olive_products_df_dict:
-        return redirect(url_for('index'))
-    # 상품 정보 찾기
-    product_row = None
-    for p in total_products:
-        if str(p['goodsNo']) == str(goodsNo):
-            product_row = p
-            break
-    if not product_row:
-        return redirect(url_for('index'))
-    product_name = product_row['name']
-    product_link = product_row['link']
-    product_rating = product_row['rating']
-    product_platform = product_row['platform']
-    # 리뷰 데이터 가져오기
-    all_reviews = []
-    if product_platform == "olive":
-        olive_reviews_df = olive_reviews_crawl([goodsNo], limit=5)
-    all_reviews.append(olive_reviews_df)
-    if all_reviews:
-        total_reviews_df = pd.concat(all_reviews, ignore_index=True)
-        total_reviews_df["word_count"] = total_reviews_df["content"].str.split().apply(len)
-        total_reviews_df["damage"] = 0.002*total_reviews_df["word_count"] + 0.219*total_reviews_df["photo_present"] + 0.279*total_reviews_df["top_rank_present"] + 0.279*total_reviews_df["badges_present"]
-    
-    
-    from review_utils import extract_keywords_with_openai
-    total_reviews_df["keywords"] = total_reviews_df["content"].apply(extract_keywords_with_openai)
-    keywords_all = [kw for kws in total_reviews_df["keywords"] for kw in kws]
-    reviews = total_reviews_df.to_dict(orient="records")
-    total_reviews_df["prd_link"] = product_link
-    total_reviews_df["prd_name"] = product_name
-    total_reviews_df["prd_rating"] = product_rating
-    total_reviews_df["prd_platform"] = product_platform
-    # 워드클라우드 및 히스토그램 생성
+    import os
+    import pandas as pd
+    from collections import Counter
+    import io, base64
+    from flask import render_template
+
+    # 항상 CSV에서 데이터 읽기
+    csv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'total_brand_reviews_df.csv')
+    if not os.path.exists(csv_path):
+        return "리뷰 데이터 파일이 없습니다.", 404
+    df = pd.read_csv(csv_path)
+    # goodsNo별로 필터링
+    reviews_df = df[df['goodsNo'].astype(str) == str(goodsNo)].copy()
+    if reviews_df.empty:
+        return "해당 상품의 리뷰가 없습니다.", 404
+
+    # 테이블에 필요한 정보 추출
+    reviews = []
+    for _, row in reviews_df.iterrows():
+        reviews.append({
+            'nickname': row['nickname'],
+            'date': row['date'],
+            'location': row.get('location', ''),
+            'damage': row['damage'],
+            'score': row['score'],
+            'help_cnt': row['help_cnt'],
+            'content': row['content'],
+            'keywords': eval(row['keywords']) if isinstance(row['keywords'], str) else [],
+        })
+
+    # 워드클라우드/히스토그램용 키워드 모으기
+    keywords_all = [kw for review in reviews for kw in review['keywords']]
+
+    # 워드클라우드 생성
     wordcloud_url = None
     histogram_url = None
     if keywords_all:
@@ -50,15 +47,11 @@ def product_reviews(goodsNo):
         import matplotlib
         matplotlib.use('Agg')
         import matplotlib.pyplot as plt
-        import io, base64
-        import os
-        from collections import Counter
-        # --- 워드클라우드 생성 ---
-        img_io = io.BytesIO()
         fonts_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'fonts')
         font_candidates = [f for f in os.listdir(fonts_dir) if f.lower().endswith('.ttf')]
         font_path = os.path.join(fonts_dir, font_candidates[0]) if font_candidates else None
         wc = WordCloud(font_path=font_path, width=800, height=260, background_color='white').generate(' '.join(keywords_all))
+        img_io = io.BytesIO()
         plt.figure(figsize=(8, 2.6))
         plt.imshow(wc, interpolation='bilinear')
         plt.axis('off')
@@ -67,15 +60,13 @@ def product_reviews(goodsNo):
         plt.close()
         img_io.seek(0)
         wordcloud_url = 'data:image/png;base64,' + base64.b64encode(img_io.getvalue()).decode('utf8')
-        print('wordcloud_url:', wordcloud_url[:100])  # 앞 100글자만 출력
-        # --- 히스토그램(bar chart) 생성 ---
-        # 상위 20개 키워드만 표시
+        # --- 히스토그램 생성 ---
         keyword_counts = Counter(keywords_all)
         keywords, counts = zip(*keyword_counts.most_common(20)) if keyword_counts else ([],[])
         img_io_hist = io.BytesIO()
         import matplotlib.font_manager as fm
-        font_path_hist = os.path.join(fonts_dir, 'GamjaFlower-Regular.ttf')
-        font_prop = fm.FontProperties(fname=font_path_hist)
+        font_path_hist = os.path.join(fonts_dir, 'GamjaFlower-Regular.ttf') if os.path.exists(os.path.join(fonts_dir, 'GamjaFlower-Regular.ttf')) else font_path
+        font_prop = fm.FontProperties(fname=font_path_hist) if font_path_hist else None
         plt.figure(figsize=(8, 2.6))
         bars = plt.bar(keywords, counts, color='#5C3BFF', edgecolor='#4328d9')
         plt.xticks(rotation=30, ha='right', fontsize=13, fontproperties=font_prop)
@@ -84,21 +75,19 @@ def product_reviews(goodsNo):
         plt.ylabel('빈도수', fontsize=15, labelpad=8, fontproperties=font_prop)
         plt.title('키워드 히스토그램', fontsize=18, pad=10, color='#5C3BFF', fontproperties=font_prop)
         plt.tight_layout()
-        # y축을 정수로만 표시
         import numpy as np
         if counts:
             plt.yticks(np.arange(0, max(counts)+1, 1))
-        plt.tight_layout()
         plt.savefig(img_io_hist, format='png', bbox_inches='tight', pad_inches=0)
         plt.close()
-        img_io_hist.seek(0)
-        histogram_url = 'data:image/png;base64,' + base64.b64encode(img_io_hist.getvalue()).decode('utf8')
-        print('histogram_url:', histogram_url[:100])  # 앞 100글자만 출력
         img_io_hist.seek(0)
         histogram_url = 'data:image/png;base64,' + base64.b64encode(img_io_hist.getvalue()).decode('utf8')
     # 각 리뷰에 대해 keywords_str 추가 (쉼표로 연결)
     for review in reviews:
         review['keywords_str'] = ', '.join(review.get('keywords', [])) if review.get('keywords') else ''
+    # 상품 정보(테이블에서 첫 행 사용)
+    product_name = reviews_df.iloc[0]['prd_name']
+    product_link = reviews_df.iloc[0]['prd_link']
     return render_template(
         "product_reviews.html",
         product_name=product_name,

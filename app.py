@@ -49,11 +49,7 @@ def index():
         session["tutorial_seen"] = True 
     tutorial_mode = not session.get("tutorial_seen", False)
 
-    # ── 2. skeletons for the template (stay None on plain GET)
-    products = None
-    olive_products_df = None
-
-    # ── 3. Handle the POST: run the optimiser & build the dashboard
+    # ── 2. POST: 기존 크롤링/저장 로직 유지 ──
     import time
     if request.method == "POST":
         t_post_start = time.time()
@@ -80,22 +76,54 @@ def index():
                 print(f"[TIMER] olive_products_crawl 완료: {time.time() - t_crawl_all_start:.2f}s")
                 t_loop_start = time.time()
                 # 전체 상품 정보 저장
+                # 상품별 damage 총합 계산 (CSV가 있으면 활용)
+                import os
+                import pandas as pd
+                csv_path = os.path.join(os.path.dirname(__file__), 'total_brand_reviews_df.csv')
+                damage_sum_map = {}
+                if os.path.exists(csv_path):
+                    df = pd.read_csv(csv_path)
+                    if 'prd_name' in df.columns and 'damage' in df.columns:
+                        for prd_name, group in df.groupby('prd_name'):
+                            damage_sum_map[prd_name] = group['damage'].sum()
                 for _, row in total_products_df.iterrows():
-                    # 리뷰 없는 상품은 나중에 처리 위해 goodsNo도 저장
+                    damage_sum = damage_sum_map.get(row['name'], None)
                     products.append({
                         'goodsNo': row['goodsNo'],
                         'name': row['name'],
                         'rating': row['rating'],
                         'link': row['link'] if 'link' in row else '',
-                        'platform': row['platform']
+                        'platform': row['platform'],
+                        'damage_sum': damage_sum
                     })
                 print(f"[TIMER] 상품 반복문 완료: {time.time() - t_loop_start:.2f}s")
             except Exception as e:
                 print(f"[ERROR] 브랜드 코드 추출 실패: {e}")
-        # 세션에 상품/리뷰 데이터 임시 저장 (리뷰 없는 상품 비활성화 위해)
+        else:
+            # 브랜드명 없이 전체 상품 fallback 크롤링
+            try:
+                print("[TIMER] fallback: olive_products_crawl(None) 전체 상품 크롤링 시작")
+                from crawlers.olive_crawler import olive_products_crawl
+                olive_products_df = olive_products_crawl(None, limit=10)
+                olive_products_df["platform"] = "olive"
+                total_products_df = olive_products_df
+                print(f"[TIMER] fallback: olive_products_crawl(None) 완료")
+                t_loop_start = time.time()
+                products = []
+                for _, row in total_products_df.iterrows():
+                    products.append({
+                        'goodsNo': row['goodsNo'],
+                        'name': row['name'],
+                        'rating': row['rating'],
+                        'link': row['link'] if 'link' in row else '',
+                        'platform': row['platform'],
+                        'damage_sum': None
+                    })
+                print(f"[TIMER] fallback 상품 반복문 완료: {time.time() - t_loop_start:.2f}s")
+            except Exception as e:
+                print(f"[ERROR] fallback 전체상품 크롤링 실패: {e}")
         session['total_products'] = products
         session['olive_products_df'] = olive_products_df.to_dict() if olive_products_df is not None else None
-
         # ---- 전체 상품 리뷰 수집 및 합치기 ----
         import pandas as pd
         from crawlers.olive_crawler import olive_reviews_crawl
@@ -108,7 +136,6 @@ def index():
                 if platform == 'olive':
                     reviews_df = olive_reviews_crawl([goodsNo], limit=5)
                     if reviews_df is not None and not reviews_df.empty:
-                        # 리뷰 전처리 및 컬럼 추가 (product_reviews 참고)
                         reviews_df["word_count"] = reviews_df["content"].str.split().apply(len)
                         reviews_df["damage"] = 0.002*reviews_df["word_count"] + 0.219*reviews_df["photo_present"] + 0.279*reviews_df["top_rank_present"] + 0.279*reviews_df["badges_present"]
                         reviews_df["keywords"] = reviews_df["content"].apply(extract_keywords_with_openai)
@@ -125,20 +152,48 @@ def index():
             print(f"[INFO] total_brand_reviews_df.csv 저장 완료: {len(total_brand_reviews_df)}건")
         else:
             print("[INFO] 수집된 리뷰 없음. total_brand_reviews_df.csv 미생성")
-
         print(f"[TIMER] 전체 POST 처리 완료: {time.time() - t_post_start:.2f}s")
         return render_template(
             "index.html",
             products=products,
             tutorial_mode=tutorial_mode
         )
-    # GET 요청 시에도 세션 저장된 상품 전달
-    products = session.get('total_products')
+
+    # ── 3. GET: CSV에서 상품별 테이블 직접 집계 ──
+    import os
+    import pandas as pd
+    csv_path = os.path.join(os.path.dirname(__file__), 'total_brand_reviews_df.csv')
+    products = []
+    if os.path.exists(csv_path):
+        df = pd.read_csv(csv_path)
+        grouped = df.groupby('prd_name').agg({
+            'rating': 'mean',
+            'damage': 'sum',
+            'goodsNo': 'first',
+            'prd_link': 'first'
+        }).reset_index()
+        for _, row in grouped.iterrows():
+            products.append({
+                'goodsNo': row['goodsNo'],
+                'name': row['prd_name'],
+                'rating': round(row['rating'], 2) if pd.notnull(row['rating']) else '',
+                'damage_sum': round(row['damage'], 2) if pd.notnull(row['damage']) else 0,
+                'link': row['prd_link']
+            })
     return render_template(
         "index.html",
         products=products,
         tutorial_mode=tutorial_mode
     )
+
+# VoC 듣기: 강제 새로고침용 라우트 (프론트에서 버튼으로 호출)
+@app.route("/voc_listen", methods=["POST"])
+def voc_listen():
+    from flask import request
+    brand_name = request.form.get("brand_name")
+    brand_url = request.form.get("brand_url")
+    with app.test_request_context('/', method='POST', data={'brand_name': brand_name or '', 'brand_url': brand_url or ''}):
+        return index()
 
 
 # Blueprint 등록
