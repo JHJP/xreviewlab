@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, session, redirect, url_for
-from crawlers.olive_crawler import crawl_reviews_for_goods
+from crawlers.olive_crawler import olive_reviews_crawl
 import pandas as pd
 
 product_bp = Blueprint('product', __name__)
@@ -8,8 +8,8 @@ product_bp = Blueprint('product', __name__)
 def product_reviews(goodsNo):
     # 상품 데이터프레임 불러오기
     total_products = session.get('total_products')
-    total_products_df_dict = session.get('total_products_df')
-    if not total_products or not total_products_df_dict:
+    olive_products_df_dict = session.get('olive_products_df')
+    if not total_products or not olive_products_df_dict:
         return redirect(url_for('index'))
     # 상품 정보 찾기
     product_row = None
@@ -22,21 +22,22 @@ def product_reviews(goodsNo):
     product_name = product_row['name']
     product_link = product_row['link']
     # 리뷰 데이터 가져오기
-    reviews_df = crawl_reviews_for_goods([goodsNo], limit=5)
-    reviews = []
-    keywords_all = []
-    if not reviews_df.empty:
-        for _, row in reviews_df.iterrows():
-            review = row.to_dict()
-            # 키워드 추출
-            try:
-                from review_utils import extract_keywords_with_openai
-                keywords = extract_keywords_with_openai(review['content'])
-                keywords_all.extend(keywords)
-            except Exception:
-                keywords = []
-            review['keywords'] = keywords
-            reviews.append(review)
+    all_reviews = []
+    olive_reviews_df = olive_reviews_crawl([goodsNo], limit=5)
+    olive_reviews_df["location"] = "올리브영"
+    all_reviews.append(olive_reviews_df)
+    if all_reviews:
+        total_reviews_df = pd.concat(all_reviews, ignore_index=True)
+        total_reviews_df["word_count"] = total_reviews_df["content"].str.split().apply(len)
+        total_reviews_df["damage"] = 0.002*total_reviews_df["word_count"] + 0.219*total_reviews_df["photo_present"] + 0.279*total_reviews_df["top_rank_present"] + 0.279*total_reviews_df["badges_present"]
+    
+    
+    from review_utils import extract_keywords_with_openai
+    total_reviews_df["keywords"] = total_reviews_df["content"].apply(extract_keywords_with_openai)
+    keywords_all = [kw for kws in total_reviews_df["keywords"] for kw in kws]
+    reviews = total_reviews_df.to_dict(orient="records")
+    total_reviews_df["link"] = product_link
+    total_reviews_df["prd_name"] = product_name 
     # 워드클라우드 및 히스토그램 생성
     wordcloud_url = None
     histogram_url = None

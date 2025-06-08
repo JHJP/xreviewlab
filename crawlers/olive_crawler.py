@@ -52,7 +52,7 @@ def safe_json(resp: requests.Response) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def get_brand_code(brand_name: str) -> Optional[str]:
+def olive_get_brand_code(brand_name: str) -> Optional[str]:
     """
     Olive Young 검색 메인 API에서 'cateBrand' 배열을 읽어
     브랜드 코드를(id) 반환한다. 못 찾으면 None.
@@ -107,7 +107,7 @@ def parse_products(html):
         items.append({"goodsNo": goods_no, "name": name, "rating": rating, "link": a["href"]})
     return items
 
-def crawl_brand_all(brand, rows=24,
+def olive_products_crawl(brand, rows=24,
                     disp_cat="", flt_disp_cat="",
                     delay=(0.3, 0.8), limit="all"):
     """브랜드 전체상품(모든 페이지) DataFrame 반환. limit: int 또는 'all'"""
@@ -147,21 +147,21 @@ def crawl_brand_all(brand, rows=24,
 
 # ───────────────────────── 리뷰 크롤러 함수 ─────────────────────────
 
-def crawl_reviews_for_goods(goods_nos, limit="all"):
+def olive_reviews_crawl(goods_nos, limit="all"):
     import pandas as pd
     # 여러 상품 번호 처리
     if isinstance(goods_nos, (list, tuple, set)):
         all_reviews = []
         for goods_no in goods_nos:
             print(f"크롤링: {goods_no}")
-            reviews_df = crawl_reviews_for_goods(goods_no, limit=limit)
-            print(f"{goods_no} 리뷰 수집 결과: {len(reviews_df)}개")
-            all_reviews.append(reviews_df)
+            olive_reviews_df = olive_reviews_crawl(goods_no, limit=limit)
+            print(f"{goods_no} 리뷰 수집 결과: {len(olive_reviews_df)}개")
+            all_reviews.append(olive_reviews_df)
         if all_reviews:
             total_reviews_df = pd.concat(all_reviews, ignore_index=True)
             return total_reviews_df
         else:
-            return pd.DataFrame(columns=['goodsNo', 'nickname', 'profile_present', 'top_rank', 'badges', 'score', 'date', 'content', 'help_cnt', 'photo_present'])
+            return pd.DataFrame(columns=['goodsNo', 'nickname', 'profile_present', 'top_rank_present', 'badges_present', 'score', 'date', 'content', 'help_cnt', 'photo_present'])
     # 단일 상품 번호 처리(기존 로직)
     goods_no = goods_nos
     url = f"https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo={goods_no}"
@@ -224,9 +224,8 @@ def crawl_reviews_for_goods(goods_nos, limit="all"):
                     nickname = nickname.get_text(strip=True) if nickname else ''
 
                     # 2-b. 추가 사용자 정보(예: TOP 순위, 배지 등)
-                    top_rank = li.select_one('p.info_user a.top')
-                    top_rank = top_rank.get_text(strip=True) if top_rank else None
-                    badges   = [a.get_text(strip=True) for a in li.select('div.badge a')]
+                    top_rank_present = li.select_one('p.info_user a.top') is not None
+                    badges_present = bool(li.select('div.badge a'))
 
                     # 3. 리뷰 별점(1‒5점)
                     score_span = li.select_one('span.review_point span.point')
@@ -261,8 +260,8 @@ def crawl_reviews_for_goods(goods_nos, limit="all"):
                                 'goodsNo'         : goods_no,
                                 'nickname'        : nickname,
                                 'profile_present' : profile_present,
-                                'top_rank'        : top_rank,          # 없을 수도 있음(None)
-                                'badges'          : badges,            # 리스트(비어 있을 수도)
+                                'top_rank_present' : top_rank_present,  # True/False
+                                'badges_present'   : badges_present,    # True/False
                                 'score'           : score,
                                 'date'            : date,
                                 'content'         : content,
@@ -320,18 +319,18 @@ def crawl_reviews_for_goods(goods_nos, limit="all"):
         columns = ['goodsNo'] + [k for k in results[0].keys() if k != 'goodsNo']
         return pd.DataFrame(results, columns=columns)
     else:
-        return pd.DataFrame(columns=['goodsNo', 'nickname', 'profile_present', 'top_rank', 'badges', 'score', 'date', 'content', 'help_cnt', 'photo_present'])
+        return pd.DataFrame(columns=['goodsNo', 'nickname', 'profile_present', 'top_rank_present', 'badges_present', 'score', 'date', 'content', 'help_cnt', 'photo_present'])
 
 # ───────────────────────── 실행 예시 ─────────────────────────
 if __name__ == "__main__":
-    brand_code = get_brand_code("가그린")
+    brand_code = olive_get_brand_code("가그린")
     prod_limit = 3  # 원하는 상품 개수, 'all'이면 전체
     review_limit = 5 # 원하는 리뷰 개수, 'all'이면 전체
-    total_products_df = crawl_brand_all(brand_code, limit=prod_limit)
-    print(f"총 {len(total_products_df)}개")
-    print(total_products_df)
+    olive_products_df = olive_products_crawl(brand_code, limit=prod_limit)
+    print(f"총 {len(olive_products_df)}개")
+    print(olive_products_df)
     # 리뷰 크롤링 예시 (한 번에 처리)
-    goods_nos = total_products_df['goodsNo'].tolist()
-    total_reviews_df = crawl_reviews_for_goods(goods_nos, limit=review_limit)
-    print(f"총 리뷰 수집 결과: {len(total_reviews_df)}개")
-    print(total_reviews_df)
+    goods_nos = olive_products_df['goodsNo'].tolist()
+    olive_total_reviews_df = olive_reviews_crawl(goods_nos, limit=review_limit)
+    print(f"총 리뷰 수집 결과: {len(olive_total_reviews_df)}개")
+    print(olive_total_reviews_df)

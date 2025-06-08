@@ -51,7 +51,7 @@ def index():
 
     # ── 2. skeletons for the template (stay None on plain GET)
     products = None
-    total_products_df = None
+    olive_products_df = None
 
     # ── 3. Handle the POST: run the optimiser & build the dashboard
     import time
@@ -60,19 +60,20 @@ def index():
         brand_name = request.form.get("brand_name")
         brand_url = request.form.get("brand_url")
         products = []
-        total_products_df = None
+        olive_products_df = None
         if brand_name:
             try:
-                print("[TIMER] 크롤러 import 및 get_brand_code 시작")
+                print("[TIMER] 크롤러 import 및 olive_get_brand_code 시작")
                 t_crawler_start = time.time()
-                from crawlers.olive_crawler import get_brand_code, crawl_brand_all
-                brand_code = get_brand_code(brand_name)
-                print(f"[TIMER] get_brand_code 완료: {time.time() - t_crawler_start:.2f}s")
+                from crawlers.olive_crawler import olive_get_brand_code, olive_products_crawl
+                brand_code = olive_get_brand_code(brand_name)
+                print(f"[TIMER] olive_get_brand_code 완료: {time.time() - t_crawler_start:.2f}s")
                 t_crawl_all_start = time.time()
-                total_products_df = crawl_brand_all(brand_code, limit=3)
-                print(f"[TIMER] crawl_brand_all 완료: {time.time() - t_crawl_all_start:.2f}s")
+                olive_products_df = olive_products_crawl(brand_code, limit=3)
+                print(f"[TIMER] olive_products_crawl 완료: {time.time() - t_crawl_all_start:.2f}s")
                 t_loop_start = time.time()
-                for _, row in total_products_df.iterrows():
+                # 전체 상품 정보 저장
+                for _, row in olive_products_df.iterrows():
                     # 리뷰 없는 상품은 나중에 처리 위해 goodsNo도 저장
                     products.append({
                         'goodsNo': row['goodsNo'],
@@ -85,7 +86,7 @@ def index():
                 print(f"[ERROR] 브랜드 코드 추출 실패: {e}")
         # 세션에 상품/리뷰 데이터 임시 저장 (리뷰 없는 상품 비활성화 위해)
         session['total_products'] = products
-        session['total_products_df'] = total_products_df.to_dict() if total_products_df is not None else None
+        session['olive_products_df'] = olive_products_df.to_dict() if olive_products_df is not None else None
         print(f"[TIMER] 전체 POST 처리 완료: {time.time() - t_post_start:.2f}s")
         return render_template(
             "index.html",
