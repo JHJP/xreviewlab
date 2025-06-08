@@ -11,7 +11,6 @@ def product_reviews(goodsNo):
     total_products_df_dict = session.get('total_products_df')
     if not total_products or not total_products_df_dict:
         return redirect(url_for('index'))
-    total_products_df = pd.DataFrame(total_products_df_dict)
     # 상품 정보 찾기
     product_row = None
     for p in total_products:
@@ -31,7 +30,7 @@ def product_reviews(goodsNo):
             review = row.to_dict()
             # 키워드 추출
             try:
-                from review_utils import extract_keywords_with_openai, generate_response_with_openai
+                from review_utils import extract_keywords_with_openai
                 keywords = extract_keywords_with_openai(review['content'])
                 keywords_all.extend(keywords)
             except Exception:
