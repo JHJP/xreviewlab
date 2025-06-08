@@ -58,3 +58,49 @@ def extract_keywords_with_openai(review_text):
         return keywords
     except Exception:
         return extract_keywords(review_text)
+
+
+def generate_response_with_openai(review_text: str) -> str:
+    """
+    불평·불만 리뷰를 입력하면
+    1) 먼저 진심 어린 사과
+    2) 고객이 언급한 문제점을 인지했다는 표현
+    3) 동일 문제가 반복되지 않도록 제품/서비스 개선에 힘쓰겠다는 약속
+    만을 한국어로 작성해 돌려준다. (보상·쿠폰·환불·교환 금지)
+    """
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        # API 키가 없으면 아주 간단한 고정 답변
+        return "불편을 드려 정말 죄송합니다. 말씀해 주신 부분을 면밀히 살펴 개선하겠습니다."
+
+    client = OpenAI(api_key=api_key)
+
+    # 1단계: 리뷰에서 핵심 키워드 추출
+    keywords = extract_keywords_with_openai(review_text)
+
+    # 2단계: 사과·대응 답변 생성
+    system_prompt = (
+        "너는 고객센터 매니저다. 반드시:\n"
+        "1) 진심으로 사과한다. (첫 문장)\n"
+        "2) 고객이 지적한 구체적인 문제점을 1~2문장 안에서 언급한다."
+        "3) 쿠폰, 환불, 교환, 금전 보상 약속은 절대 하지 않는다.\n"
+        "4) 해당 문제를 해결하고 서비스·상품 품질을 개선하겠다고 약속하며 마친다.\n"
+        "5) 3~5문장, 丁寧체(존댓말)를 사용한다."
+    )
+
+    user_prompt = (
+        f"[리뷰 전문]\n{review_text}\n\n"
+        f"[추출 키워드]\n{', '.join(keywords) if keywords else '(추출 실패)'}"
+    )
+
+    completion = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=0.3,
+        max_tokens=256,
+    )
+
+    return completion.choices[0].message.content.strip()

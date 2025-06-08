@@ -17,9 +17,11 @@
     <thead>
       <tr style="background:#f2f2f2;">
         <th style="padding:0.7em; border:1px solid #ddd;">닉네임</th>
-        <th style="padding:0.7em; border:1px solid #ddd;">리뷰 업로드 날짜</th>
+        <th style="padding:0.7em; border:1px solid #ddd;">업로드 날짜</th>
         <th style="padding:0.7em; border:1px solid #ddd;">리뷰 장소</th>
         <th style="padding:0.7em; border:1px solid #ddd;">위험수치</th>
+        <th style="padding:0.7em; border:1px solid #ddd;">별점</th>
+        <th style="padding:0.7em; border:1px solid #ddd;">도움돼요 수</th>
         <th style="padding:0.7em; border:1px solid #ddd;">리뷰 내용</th>
       </tr>
     </thead>
@@ -32,11 +34,19 @@
           <a href="{{ product_link }}" target="_blank">올리브영</a>
         </td>
         <td style="padding:0.7em; border:1px solid #ddd; color:#bbb;">추후 예정</td>
+        <td style="padding:0.7em; border:1px solid #ddd;">{{ r.score }}</td>
+        <td style="padding:0.7em; border:1px solid #ddd;">{{ r.help_cnt }}</td>
         <td style="padding:0.7em; border:1px solid #ddd;">{{ r.content }}</td>
       </tr>
       <tr>
-        <td colspan="5" style="padding:0.4em 0.7em; border:1px solid #ddd; background:#fafafa; color:#888; font-size:0.97em; text-align:left;">
-          <span style="font-style:italic;">키워드: {{ r.keywords_str if r.keywords_str else '키워드 없음' }}</span>
+        <td colspan="7" style="padding:0.4em 0.7em; border:1px solid #ddd; background:#fafafa; color:#888; font-size:0.97em; text-align:left;">
+          <span style="font-style:italic;">불평 키워드: {{ r.keywords_str if r.keywords_str else '키워드 없음' }}</span>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="7" style="padding:0.4em 0.7em; border:1px solid #ddd; background:#f6fffa; text-align:left;">
+          <button type="button" class="auto-reply-btn" data-review-content="{{ r.content|e }}" style="padding:0.35em 1.1em; border-radius:6px; border:1px solid #2ED47A; background:#2ED47A; color:#fff; font-size:0.96em; font-weight:600; cursor:pointer;">자동응답 생성</button>
+          <span class="auto-reply-result" style="margin-left:1.2em; color:#3b3b3b; font-size:0.97em;"></span>
         </td>
       </tr>
       {% endfor %}
@@ -48,4 +58,5 @@
   <div style="margin-top:2em;">
     <a href="{{ url_for('index') }}" class="banner-btn">← 상품 목록으로 돌아가기</a>
   </div>
+  <script src="{{ url_for('static', filename='auto_reply.js') }}"></script>
 {% endblock %}
