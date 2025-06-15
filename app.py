@@ -6,7 +6,7 @@ logging.basicConfig(
 import matplotlib
 matplotlib.use('Agg')
 from flask import Flask, render_template, request, session, jsonify
-
+import numpy as np
 # ───────────────────────────────────────────────────────────────
 # 📊  Brand-reputation research → ₩ per DAMAGE-UNIT
 # ----------------------------------------------------------------
@@ -142,7 +142,8 @@ def index():
                     reviews_df = olive_reviews_crawl([goodsNo], limit=5)
                     if reviews_df is not None and not reviews_df.empty:
                         reviews_df["word_count"] = reviews_df["content"].str.split().apply(len)
-                        reviews_df["damage"] = 0.002*reviews_df["word_count"] + 0.219*reviews_df["photo_present"] + 0.279*reviews_df["top_rank_present"] + 0.279*reviews_df["badges_present"]
+                        from routes.damage_calc import calculate_damage
+                        reviews_df = calculate_damage(reviews_df)
                         reviews_df["keywords"] = reviews_df["content"].apply(extract_keywords_with_openai)
                         reviews_df["prd_link"] = prod.get('link', '')
                         reviews_df["prd_name"] = prod.get('name', '')
