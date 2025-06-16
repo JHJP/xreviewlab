@@ -118,7 +118,7 @@ import ast
 def get_keyword_info(goodsNo, keyword):
     # 의미 (RAG)
     meaning = get_keyword_meaning_rag(goodsNo, keyword)
-    # cost, processing_time 조회
+    # cost, processing_time 조회 (신규: keyword_plan_info)
     csv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'total_brand_reviews_df.csv')
     df = pd.read_csv(csv_path)
     idxs = df[df['goodsNo'].astype(str) == str(goodsNo)].index
@@ -128,8 +128,20 @@ def get_keyword_info(goodsNo, keyword):
         # real_keywords_all: 문자열 -> 리스트
         kw_list = ast.literal_eval(df.at[idx, 'real_keywords_all']) if pd.notnull(df.at[idx, 'real_keywords_all']) else []
         if keyword in kw_list:
-            cost = df.at[idx, 'cost'] if 'cost' in df.columns else ''
-            processing_time = df.at[idx, 'processing_time'] if 'processing_time' in df.columns else ''
+            # keyword_plan_info 우선
+            plan_info = None
+            if 'keyword_plan_info' in df.columns and pd.notnull(df.at[idx, 'keyword_plan_info']):
+                try:
+                    import json
+                    plan_info = json.loads(df.at[idx, 'keyword_plan_info'])
+                except Exception:
+                    plan_info = None
+            if plan_info and keyword in plan_info:
+                cost = plan_info[keyword].get('cost', '')
+                processing_time = plan_info[keyword].get('time', '')
+            else:
+                cost = df.at[idx, 'cost'] if 'cost' in df.columns else ''
+                processing_time = df.at[idx, 'processing_time'] if 'processing_time' in df.columns else ''
             break
     return jsonify({
         'meaning': meaning,
@@ -137,11 +149,33 @@ def get_keyword_info(goodsNo, keyword):
         'processing_time': processing_time
     })
 
+# 대응플랜 생성 탭 (GET/POST)
+from flask import render_template
+@product_bp.route('/plan', methods=['GET', 'POST'])
+def plan():
+    result = None
+    if request.method == 'POST':
+        budget = request.form.get('budget', type=float)
+        hours = request.form.get('hours', type=float)
+        # Gurobi optimizer 호출
+        import os
+        import pandas as pd
+        from optimizer_gurobi_robust_MILP import optimize
+        csv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'total_brand_reviews_df.csv')
+        try:
+            rec_df, sens = optimize(csv_path, budget, hours)
+            result = rec_df.to_html(index=False) + '<hr>' + '<pre>' + str(sens) + '</pre>'
+        except Exception as e:
+            result = f'<span style="color:red;">오류: {e}</span>'
+    return render_template('plan.html', result=result)
+
+
 @product_bp.route('/product/<goodsNo>/keyword/<keyword>', methods=['POST'])
 def update_keyword(goodsNo, keyword):
     data = request.get_json()
     new_keyword = data.get('new_keyword', keyword)
     cost = data.get('cost', '')
-    processing_time = data.get('processing_time', '')
-    success = update_keyword_info(goodsNo, keyword, new_keyword, cost, processing_time)
+    # Accept both 'time' (from frontend) and 'processing_time' (for backward compatibility)
+    time = data.get('time', data.get('processing_time', ''))
+    success = update_keyword_info(goodsNo, keyword, new_keyword, cost, time)
     return jsonify({'success': bool(success)})

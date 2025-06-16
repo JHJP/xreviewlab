@@ -97,7 +97,6 @@
               <div id="modal-gpt-area">
                 <div style="margin-bottom:0.7em;">
                   <strong>키워드 의미 Q&A (GPT)</strong>
-                  <button id="gpt-refresh" style="float:right; font-size:0.9em;">↻ 새로고침</button>
                 </div>
                 <div id="gpt-meaning" style="background:#f7f7fa; padding:0.8em; border-radius:7px; min-height:48px; margin-bottom:1em; color:#333;">불러오는 중...</div>
               </div>
@@ -126,7 +125,6 @@
             let modal = document.getElementById('keyword-modal');
             let modalClose = document.getElementById('modal-close');
             let gptMeaning = document.getElementById('gpt-meaning');
-            let gptRefresh = document.getElementById('gpt-refresh');
             let modalTitle = document.getElementById('modal-title');
             let editKeyword = document.getElementById('edit-keyword');
             let editCost = document.getElementById('edit-cost');
@@ -155,15 +153,6 @@
             });
             modalClose.onclick = ()=>{ modal.style.display='none'; };
             window.onclick = (e)=>{ if(e.target==modal) modal.style.display='none'; };
-            gptRefresh.onclick = function(e){
-              e.preventDefault();
-              if(currentGoodsNo && currentKeyword) {
-                gptMeaning.textContent = '불러오는 중...';
-                fetch(`/product/${currentGoodsNo}/keyword/${encodeURIComponent(currentKeyword)}`)
-                  .then(r => r.json())
-                  .then(data => { gptMeaning.textContent = data.meaning || '-'; });
-              }
-            };
             editForm.onsubmit = function(e){
               e.preventDefault();
               const newKeyword = editKeyword.value.trim();

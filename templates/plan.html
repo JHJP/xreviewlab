@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>대응플랜 생성</h2>
+  <form id="planForm" method="POST">
+    <label for="budget">가용 예산 (원)</label>
+    <input type="number" id="budget" name="budget" min="0" required>
+    <label for="hours">가용 시간 (시간)</label>
+    <input type="number" id="hours" name="hours" min="0" step="0.1" required>
+    <button type="submit" class="save-btn" style="margin-top:1em;">최적화 계산</button>
+  </form>
+</div>
+{% if result %}
+<div class="card" style="margin-top:2em;">
+  <h3>최적화 결과</h3>
+  <pre>{{ result|safe }}</pre>
+</div>
+{% endif %}
+{% endblock %}

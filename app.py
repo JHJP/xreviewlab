@@ -216,8 +216,17 @@ def voc_listen():
     from flask import request
     brand_name = request.form.get("brand_name")
     brand_url = request.form.get("brand_url")
+    # Run the main index logic (crawling, saving, etc)
     with app.test_request_context('/', method='POST', data={'brand_name': brand_name or '', 'brand_url': brand_url or ''}):
-        return index()
+        response = index()
+    # After crawling, run embedding computation
+    from embed_reviews import compute_review_embeddings
+    try:
+        compute_review_embeddings()
+    except Exception as e:
+        import logging
+        logging.error(f"[임베딩 오류] {e}")
+    return response
 
 
 # Blueprint 등록

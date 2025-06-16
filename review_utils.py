@@ -184,14 +184,30 @@ def get_keyword_meaning_rag(goodsNo, keyword, csv_path='total_brand_reviews_df.c
 def update_keyword_info(goodsNo, old_keyword, new_keyword, cost, time, csv_path='total_brand_reviews_df.csv'):
     """
     해당 상품(goodsNo)의 real_keywords_all, real_keywords_dmg_dict에서 old_keyword를 new_keyword로 완전 교체,
-    비용(cost, 원), 시간(time, 시간)도 저장. cost/time 컬럼 없으면 생성.
+    비용(cost, 원), 시간(time, 시간)은 keyword_plan_info 컬럼의 dict로 저장.
     """
+    import ast
+    import json
+    import pandas as pd
     df = pd.read_csv(csv_path)
-    # cost/time 컬럼 없으면 추가
-    if 'cost' not in df.columns:
-        df['cost'] = ''
-    if 'processing_time' not in df.columns:
-        df['processing_time'] = ''
+
+    # ── 1. keyword_plan_info 컬럼이 없으면 생성 및 마이그레이션 ──
+    if 'keyword_plan_info' not in df.columns:
+        # 기존 cost/processing_time 컬럼이 있으면 마이그레이션
+        plan_info_col = []
+        for i, row in df.iterrows():
+            try:
+                kw_list = ast.literal_eval(row['real_keywords_all']) if pd.notnull(row['real_keywords_all']) else []
+            except Exception:
+                kw_list = []
+            plan_dict = {}
+            for kw in kw_list:
+                c = row['cost'] if 'cost' in df.columns and pd.notnull(row['cost']) else ''
+                t = row['processing_time'] if 'processing_time' in df.columns and pd.notnull(row['processing_time']) else ''
+                plan_dict[kw] = {"cost": c, "time": t}
+            plan_info_col.append(json.dumps(plan_dict, ensure_ascii=False))
+        df['keyword_plan_info'] = plan_info_col
+
     # 상품별 행 인덱스
     idxs = df[df['goodsNo'].astype(str) == str(goodsNo)].index
     for idx in idxs:
@@ -206,8 +222,18 @@ def update_keyword_info(goodsNo, old_keyword, new_keyword, cost, time, csv_path=
         if old_keyword in dmg_dict:
             dmg_dict[new_keyword] = dmg_dict.pop(old_keyword)
         df.at[idx, 'real_keywords_dmg_dict'] = str(dmg_dict)
-        # 비용/시간 업데이트
-        df.at[idx, 'cost'] = str(cost)
-        df.at[idx, 'processing_time'] = str(time)
+        # keyword_plan_info: 문자열 -> dict
+        plan_info = {}
+        if pd.notnull(df.at[idx, 'keyword_plan_info']):
+            try:
+                plan_info = json.loads(df.at[idx, 'keyword_plan_info'])
+            except Exception:
+                plan_info = {}
+        # 기존 값 옮기기 (old_keyword -> new_keyword)
+        if old_keyword in plan_info:
+            plan_info[new_keyword] = plan_info.pop(old_keyword)
+        # 값 저장
+        plan_info[new_keyword] = {"cost": cost, "time": time}
+        df.at[idx, 'keyword_plan_info'] = json.dumps(plan_info, ensure_ascii=False)
     df.to_csv(csv_path, index=False, encoding='utf-8-sig')
     return True
