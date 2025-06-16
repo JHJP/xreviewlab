@@ -80,10 +80,114 @@
         <td colspan="3" style="padding:0.5em 0.7em; border:1px solid #ddd; background:#f9f9f9; color:#666; font-size:0.96em;">
           <strong>상위 키워드:</strong>
           {% if p.top5_keywords and p.top5_keywords|length > 0 %}
-            {{ p.top5_keywords|join(', ') }}
+            <span class="keyword-list">
+              {% for kw in p.top5_keywords %}
+                <a href="#" class="keyword-btn" data-goodsno="{{ p.goodsNo }}" data-keyword="{{ kw }}">{{ kw }}</a>{% if not loop.last %}, {% endif %}
+              {% endfor %}
+            </span>
           {% else %}
             -
           {% endif %}
+
+          <!-- Modal for keyword editing/Q&A -->
+          <div id="keyword-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+              <span class="close" id="modal-close">&times;</span>
+              <h3 id="modal-title">키워드 상세</h3>
+              <div id="modal-gpt-area">
+                <div style="margin-bottom:0.7em;">
+                  <strong>키워드 의미 Q&A (GPT)</strong>
+                  <button id="gpt-refresh" style="float:right; font-size:0.9em;">↻ 새로고침</button>
+                </div>
+                <div id="gpt-meaning" style="background:#f7f7fa; padding:0.8em; border-radius:7px; min-height:48px; margin-bottom:1em; color:#333;">불러오는 중...</div>
+              </div>
+              <form id="keyword-edit-form">
+                <label>키워드 수정</label>
+                <input type="text" id="edit-keyword" name="edit-keyword" style="width:100%; margin-bottom:1em;">
+                <label>비용 (원)</label>
+                <input type="number" id="edit-cost" name="edit-cost" style="width:100%; margin-bottom:1em;">
+                <label>처리 시간 (시간)</label>
+                <input type="number" id="edit-time" name="edit-time" style="width:100%; margin-bottom:1.2em;">
+                <button type="submit" class="save-btn">저장</button>
+              </form>
+            </div>
+          </div>
+          <style>
+            .modal { position:fixed; z-index:1001; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.28); display:flex; align-items:center; justify-content:center; }
+            .modal-content { background:#fff; padding:2.2em 2.2em 1.2em; border-radius:12px; max-width:410px; width:96vw; box-shadow:0 8px 32px rgba(0,0,0,0.18); position:relative; }
+            .close { position:absolute; right:1.1em; top:1.1em; font-size:1.6em; color:#aaa; cursor:pointer; }
+            .save-btn { background:#2ED47A; color:#fff; border:none; padding:0.7em 1.7em; border-radius:7px; font-size:1.1em; cursor:pointer; margin-top:0.5em; }
+            .save-btn:hover { background:#21a15a; }
+            .keyword-btn { color:#4B9EFF; text-decoration:underline; cursor:pointer; margin-right:0.2em; }
+            .keyword-btn:hover { color:#2ED47A; }
+          </style>
+          <script>
+          document.addEventListener('DOMContentLoaded', function() {
+            let modal = document.getElementById('keyword-modal');
+            let modalClose = document.getElementById('modal-close');
+            let gptMeaning = document.getElementById('gpt-meaning');
+            let gptRefresh = document.getElementById('gpt-refresh');
+            let modalTitle = document.getElementById('modal-title');
+            let editKeyword = document.getElementById('edit-keyword');
+            let editCost = document.getElementById('edit-cost');
+            let editTime = document.getElementById('edit-time');
+            let editForm = document.getElementById('keyword-edit-form');
+            let currentGoodsNo = null;
+            let currentKeyword = null;
+
+            document.querySelectorAll('.keyword-btn').forEach(btn => {
+              btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                currentGoodsNo = btn.dataset.goodsno;
+                currentKeyword = btn.dataset.keyword;
+                modalTitle.textContent = `키워드 상세: "${currentKeyword}"`;
+                editKeyword.value = currentKeyword;
+                // Fetch keyword info (meaning, cost, time)
+                fetch(`/product/${currentGoodsNo}/keyword/${encodeURIComponent(currentKeyword)}`)
+                  .then(r => r.json())
+                  .then(data => {
+                    gptMeaning.textContent = data.meaning || '-';
+                    editCost.value = data.cost || '';
+                    editTime.value = data.time || '';
+                  });
+                modal.style.display = 'flex';
+              });
+            });
+            modalClose.onclick = ()=>{ modal.style.display='none'; };
+            window.onclick = (e)=>{ if(e.target==modal) modal.style.display='none'; };
+            gptRefresh.onclick = function(e){
+              e.preventDefault();
+              if(currentGoodsNo && currentKeyword) {
+                gptMeaning.textContent = '불러오는 중...';
+                fetch(`/product/${currentGoodsNo}/keyword/${encodeURIComponent(currentKeyword)}`)
+                  .then(r => r.json())
+                  .then(data => { gptMeaning.textContent = data.meaning || '-'; });
+              }
+            };
+            editForm.onsubmit = function(e){
+              e.preventDefault();
+              const newKeyword = editKeyword.value.trim();
+              const cost = editCost.value.trim();
+              const time = editTime.value.trim();
+              if(!newKeyword) { alert('키워드를 입력하세요.'); return; }
+              fetch(`/product/${currentGoodsNo}/keyword/${encodeURIComponent(currentKeyword)}`, {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({ new_keyword:newKeyword, cost, time })
+              })
+              .then(r=>r.json())
+              .then(data=>{
+                if(data.success){
+                  alert('저장되었습니다!');
+                  modal.style.display='none';
+                  window.location.reload();
+                }else{
+                  alert('저장 실패: '+(data.error||''));
+                }
+              });
+            };
+          });
+          </script>
         </td>
       </tr>
       {% endfor %}

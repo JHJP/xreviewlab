@@ -183,12 +183,12 @@ def index():
             'real_keywords_all': 'first'
         }).reset_index()
         from review_utils import get_top5_keywords_from_list
+        import ast
         for _, row in grouped.iterrows():
             real_keywords_all = []
-            if 'real_keywords_all' in row and pd.notnull(row['real_keywords_all']):
-                val = row['real_keywords_all']
+            val = row.get('real_keywords_all', None)
+            if pd.notnull(val):
                 if isinstance(val, str):
-                    import ast
                     try:
                         real_keywords_all = ast.literal_eval(val)
                     except Exception:

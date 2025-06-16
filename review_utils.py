@@ -114,3 +114,70 @@ def generate_response_with_openai(review_text: str) -> str:
     )
 
     return completion.choices[0].message.content.strip()
+
+# ────────────────────────────────────────────────────────────────
+# 상품별 키워드 의미(RAG) 및 키워드/비용/시간 업데이트 함수
+import pandas as pd
+import ast
+
+def get_keyword_meaning_rag(goodsNo, keyword, csv_path='total_brand_reviews_df.csv', rag_limit=10):
+    """
+    해당 상품(goodsNo)의 리뷰 중 keyword가 언급된 부분을 기반으로 RAG 방식으로 의미 Q&A (단순 Q&A)
+    """
+    # 1. CSV에서 해당 상품 리뷰 추출
+    df = pd.read_csv(csv_path)
+    reviews = df[df['goodsNo'].astype(str) == str(goodsNo)]['content'].tolist()
+    # 2. keyword가 포함된 리뷰만 추출 (최대 rag_limit개)
+    keyword_reviews = [r for r in reviews if keyword in r][:rag_limit]
+    if not keyword_reviews:
+        return "해당 키워드가 포함된 리뷰가 없습니다."
+    # 3. RAG prompt 구성 및 GPT 호출
+    prompt = f"다음은 상품 리뷰입니다. 키워드 '{keyword}'가 어떤 의미로 사용되는지 설명해 주세요.\n\n"
+    for i, review in enumerate(keyword_reviews, 1):
+        prompt += f"[{i}] {review}\n"
+    prompt += f"\n이 키워드가 이 상품에서 어떤 맥락으로 쓰였는지 간단히 Q&A 방식으로 설명해 주세요. (한국어로, 2~3문장)"
+    # GPT 호출 (간단화)
+    api_key = os.getenv('OPENAI_API_KEY')
+    if not api_key:
+        return "OpenAI API 키가 없습니다."
+    client = OpenAI(api_key=api_key)
+    resp = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "system", "content": "너는 상품 리뷰 분석 전문가다."},
+                  {"role": "user", "content": prompt}],
+        temperature=0.2,
+        max_tokens=256,
+    )
+    return resp.choices[0].message.content.strip()
+
+
+def update_keyword_info(goodsNo, old_keyword, new_keyword, cost, time, csv_path='total_brand_reviews_df.csv'):
+    """
+    해당 상품(goodsNo)의 real_keywords_all, real_keywords_dmg_dict에서 old_keyword를 new_keyword로 완전 교체,
+    비용(cost, 원), 시간(time, 시간)도 저장. cost/time 컬럼 없으면 생성.
+    """
+    df = pd.read_csv(csv_path)
+    # cost/time 컬럼 없으면 추가
+    if 'cost' not in df.columns:
+        df['cost'] = ''
+    if 'processing_time' not in df.columns:
+        df['processing_time'] = ''
+    # 상품별 행 인덱스
+    idxs = df[df['goodsNo'].astype(str) == str(goodsNo)].index
+    for idx in idxs:
+        # real_keywords_all: 문자열 -> 리스트
+        kw_list = ast.literal_eval(df.at[idx, 'real_keywords_all']) if pd.notnull(df.at[idx, 'real_keywords_all']) else []
+        # 완전 교체
+        kw_list = [new_keyword if kw == old_keyword else kw for kw in kw_list]
+        df.at[idx, 'real_keywords_all'] = str(kw_list)
+        # real_keywords_dmg_dict: 문자열 -> dict
+        dmg_dict = ast.literal_eval(df.at[idx, 'real_keywords_dmg_dict']) if pd.notnull(df.at[idx, 'real_keywords_dmg_dict']) else {}
+        # 키워드 교체 (값은 old_keyword의 값 유지)
+        if old_keyword in dmg_dict:
+            dmg_dict[new_keyword] = dmg_dict.pop(old_keyword)
+        df.at[idx, 'real_keywords_dmg_dict'] = str(dmg_dict)
+        # 비용/시간 업데이트
+        df.at[idx, 'cost'] = str(cost)
+        df.at[idx, 'processing_time'] = str(time)
+    df.to_csv(csv_path, index=False, encoding='utf-8-sig')
+    return True

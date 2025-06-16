@@ -1,4 +1,5 @@
-from flask import Blueprint
+from flask import Blueprint, request, jsonify
+from review_utils import get_keyword_meaning_rag, update_keyword_info
 
 product_bp = Blueprint('product', __name__)
 
@@ -106,3 +107,41 @@ def product_reviews(goodsNo):
         wordcloud_url=wordcloud_url,
         histogram_url=histogram_url,
     )
+
+# ────────────────────────────────────────────────────────────────
+# API: 키워드 의미 조회(GET), 키워드/비용/시간 수정(POST)
+import os
+import pandas as pd
+import ast
+
+@product_bp.route('/product/<goodsNo>/keyword/<keyword>', methods=['GET'])
+def get_keyword_info(goodsNo, keyword):
+    # 의미 (RAG)
+    meaning = get_keyword_meaning_rag(goodsNo, keyword)
+    # cost, processing_time 조회
+    csv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'total_brand_reviews_df.csv')
+    df = pd.read_csv(csv_path)
+    idxs = df[df['goodsNo'].astype(str) == str(goodsNo)].index
+    cost = ''
+    processing_time = ''
+    for idx in idxs:
+        # real_keywords_all: 문자열 -> 리스트
+        kw_list = ast.literal_eval(df.at[idx, 'real_keywords_all']) if pd.notnull(df.at[idx, 'real_keywords_all']) else []
+        if keyword in kw_list:
+            cost = df.at[idx, 'cost'] if 'cost' in df.columns else ''
+            processing_time = df.at[idx, 'processing_time'] if 'processing_time' in df.columns else ''
+            break
+    return jsonify({
+        'meaning': meaning,
+        'cost': cost,
+        'processing_time': processing_time
+    })
+
+@product_bp.route('/product/<goodsNo>/keyword/<keyword>', methods=['POST'])
+def update_keyword(goodsNo, keyword):
+    data = request.get_json()
+    new_keyword = data.get('new_keyword', keyword)
+    cost = data.get('cost', '')
+    processing_time = data.get('processing_time', '')
+    success = update_keyword_info(goodsNo, keyword, new_keyword, cost, processing_time)
+    return jsonify({'success': bool(success)})
