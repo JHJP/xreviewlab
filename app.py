@@ -179,15 +179,30 @@ def index():
             'rating': 'mean',
             'damage': 'sum',
             'goodsNo': 'first',
-            'prd_link': 'first'
+            'prd_link': 'first',
+            'real_keywords_all': 'first'
         }).reset_index()
+        from review_utils import get_top5_keywords_from_list
         for _, row in grouped.iterrows():
+            real_keywords_all = []
+            if 'real_keywords_all' in row and pd.notnull(row['real_keywords_all']):
+                val = row['real_keywords_all']
+                if isinstance(val, str):
+                    import ast
+                    try:
+                        real_keywords_all = ast.literal_eval(val)
+                    except Exception:
+                        real_keywords_all = []
+                elif isinstance(val, list):
+                    real_keywords_all = val
+            top5_keywords = get_top5_keywords_from_list(real_keywords_all)
             products.append({
                 'goodsNo': row['goodsNo'],
                 'name': row['prd_name'],
                 'rating': round(row['rating'], 2) if pd.notnull(row['rating']) else '',
                 'damage_sum': round(row['damage'], 2) if pd.notnull(row['damage']) else 0,
-                'link': row['prd_link']
+                'link': row['prd_link'],
+                'top5_keywords': top5_keywords
             })
     return render_template(
         "index.html",

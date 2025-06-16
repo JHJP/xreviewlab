@@ -1,6 +1,4 @@
-from flask import Blueprint, render_template, session, redirect, url_for
-from crawlers.olive_crawler import olive_reviews_crawl
-import pandas as pd
+from flask import Blueprint
 
 product_bp = Blueprint('product', __name__)
 
@@ -36,13 +34,23 @@ def product_reviews(goodsNo):
             'keywords': eval(row['keywords']) if isinstance(row['keywords'], str) else [],
         })
 
-    # 워드클라우드/히스토그램용 키워드 모으기
-    keywords_all = [kw for review in reviews for kw in review['keywords']]
-
-    # 워드클라우드 생성
+    # 워드클라우드/히스토그램용 키워드: real_keywords_all 사용
+    # real_keywords_all은 모든 row에 동일하게 할당되어 있으므로 첫 행에서 추출
+    real_keywords_all = []
+    if 'real_keywords_all' in reviews_df.columns and not reviews_df.empty:
+        first_real_keywords = reviews_df.iloc[0]['real_keywords_all']
+        # 문자열로 저장되어 있으면 파싱
+        if isinstance(first_real_keywords, str):
+            import ast
+            real_keywords_all = ast.literal_eval(first_real_keywords)
+        elif isinstance(first_real_keywords, list):
+            real_keywords_all = first_real_keywords
+        else:
+            real_keywords_all = []
+    
     wordcloud_url = None
     histogram_url = None
-    if keywords_all:
+    if real_keywords_all:
         from wordcloud import WordCloud
         import matplotlib
         matplotlib.use('Agg')
@@ -50,7 +58,7 @@ def product_reviews(goodsNo):
         fonts_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'fonts')
         font_candidates = [f for f in os.listdir(fonts_dir) if f.lower().endswith('.ttf')]
         font_path = os.path.join(fonts_dir, font_candidates[0]) if font_candidates else None
-        wc = WordCloud(font_path=font_path, width=800, height=260, background_color='white').generate(' '.join(keywords_all))
+        wc = WordCloud(font_path=font_path, width=800, height=260, background_color='white').generate(' '.join(real_keywords_all))
         img_io = io.BytesIO()
         plt.figure(figsize=(8, 2.6))
         plt.imshow(wc, interpolation='bilinear')
@@ -61,7 +69,8 @@ def product_reviews(goodsNo):
         img_io.seek(0)
         wordcloud_url = 'data:image/png;base64,' + base64.b64encode(img_io.getvalue()).decode('utf8')
         # --- 히스토그램 생성 ---
-        keyword_counts = Counter(keywords_all)
+        keyword_counts = Counter(real_keywords_all)
+        # top5_keywords: 상위 5개 키워드와 빈도수 튜플 리스트
         keywords, counts = zip(*keyword_counts.most_common(20)) if keyword_counts else ([],[])
         img_io_hist = io.BytesIO()
         import matplotlib.font_manager as fm
@@ -88,11 +97,12 @@ def product_reviews(goodsNo):
     # 상품 정보(테이블에서 첫 행 사용)
     product_name = reviews_df.iloc[0]['prd_name']
     product_link = reviews_df.iloc[0]['prd_link']
+
     return render_template(
         "product_reviews.html",
         product_name=product_name,
         product_link=product_link,
         reviews=reviews,
         wordcloud_url=wordcloud_url,
-        histogram_url=histogram_url
+        histogram_url=histogram_url,
     )

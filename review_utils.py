@@ -8,6 +8,16 @@ def extract_keywords(text):
     # 여기서는 키워드 추출 실패 시 빈 리스트 반환
     return []
 
+# 상위 5개 키워드 추출 함수 (공통)
+def get_top5_keywords_from_list(keyword_list):
+    """
+    리스트에서 빈도수 기준 상위 5개 키워드 반환 (키워드만 리스트로)
+    """
+    from collections import Counter
+    if not keyword_list:
+        return []
+    return [kw for kw, _ in Counter(keyword_list).most_common(5)]
+
 # OpenAI API 기반 키워드 추출 함수
 def extract_keywords_with_openai(review_text):
     api_key = os.getenv('OPENAI_API_KEY')
