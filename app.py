@@ -183,12 +183,12 @@ def index():
             'real_keywords_all': 'first'
         }).reset_index()
         from review_utils import get_top5_keywords_from_list
+        import ast
         for _, row in grouped.iterrows():
             real_keywords_all = []
-            if 'real_keywords_all' in row and pd.notnull(row['real_keywords_all']):
-                val = row['real_keywords_all']
+            val = row.get('real_keywords_all', None)
+            if pd.notnull(val):
                 if isinstance(val, str):
-                    import ast
                     try:
                         real_keywords_all = ast.literal_eval(val)
                     except Exception:
@@ -216,8 +216,17 @@ def voc_listen():
     from flask import request
     brand_name = request.form.get("brand_name")
     brand_url = request.form.get("brand_url")
+    # Run the main index logic (crawling, saving, etc)
     with app.test_request_context('/', method='POST', data={'brand_name': brand_name or '', 'brand_url': brand_url or ''}):
-        return index()
+        response = index()
+    # After crawling, run embedding computation
+    from embed_reviews import compute_review_embeddings
+    try:
+        compute_review_embeddings()
+    except Exception as e:
+        import logging
+        logging.error(f"[임베딩 오류] {e}")
+    return response
 
 
 # Blueprint 등록

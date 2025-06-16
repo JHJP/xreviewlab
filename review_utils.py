@@ -114,3 +114,126 @@ def generate_response_with_openai(review_text: str) -> str:
     )
 
     return completion.choices[0].message.content.strip()
+
+# ────────────────────────────────────────────────────────────────
+# 상품별 키워드 의미(RAG) 및 키워드/비용/시간 업데이트 함수
+import pandas as pd
+import ast
+import numpy as np
+import json
+
+def get_keyword_meaning_rag(goodsNo, keyword, csv_path='total_brand_reviews_df.csv', rag_limit=10):
+    """
+    해당 상품(goodsNo)의 리뷰 중 keyword와 의미적으로 유사한 리뷰(top-N)를 벡터 유사도 기반으로 추출하여 RAG Q&A.
+    """
+    api_key = os.getenv('OPENAI_API_KEY')
+    if not api_key:
+        return "OpenAI API 키가 없습니다."
+    client = OpenAI(api_key=api_key)
+    EMBEDDING_MODEL = "text-embedding-3-small"
+    # 1. 상품별 리뷰와 임베딩 추출
+    df = pd.read_csv(csv_path)
+    df_prod = df[df['goodsNo'].astype(str) == str(goodsNo)].copy()
+    # 2. 리뷰 임베딩 준비
+    contents = df_prod['content'].tolist()
+    embeddings = []
+    for emb_str in df_prod.get('embedding', []):
+        try:
+            if pd.isnull(emb_str) or str(emb_str).strip() == '':
+                embeddings.append(None)
+            else:
+                embeddings.append(np.array(json.loads(emb_str)))
+        except Exception:
+            embeddings.append(None)
+    # 3. 키워드 임베딩 생성
+    try:
+        resp = client.embeddings.create(
+            input=keyword,
+            model=EMBEDDING_MODEL
+        )
+        keyword_emb = np.array(resp.data[0].embedding)
+    except Exception as e:
+        return f"키워드 임베딩 실패: {e}"
+    # 4. 코사인 유사도 계산 및 top-N 리뷰 추출
+    sims = []
+    for emb in embeddings:
+        if emb is None:
+            sims.append(-1)
+        else:
+            sim = np.dot(keyword_emb, emb) / (np.linalg.norm(keyword_emb) * np.linalg.norm(emb) + 1e-8)
+            sims.append(sim)
+    top_idx = np.argsort(sims)[::-1][:rag_limit]
+    keyword_reviews = [contents[i] for i in top_idx if sims[i] > 0]
+    if not keyword_reviews:
+        return "해당 키워드와 의미적으로 유사한 리뷰가 없습니다. (임베딩 기반)"
+    # 5. RAG prompt 구성 및 GPT 호출
+    prompt = f"다음은 상품 리뷰입니다. 키워드 '{keyword}'가 어떤 의미로 사용되는지 설명해 주세요.\n\n"
+    for i, review in enumerate(keyword_reviews, 1):
+        prompt += f"[{i}] {review}\n"
+    prompt += f"\n이 키워드가 이 상품에서 어떤 맥락으로 쓰였는지 간단히 Q&A 방식으로 설명해 주세요. (한국어로, 2~3문장)"
+    resp = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "system", "content": "너는 상품 리뷰 분석 전문가다."},
+                  {"role": "user", "content": prompt}],
+        temperature=0.2,
+        max_tokens=256,
+    )
+    return resp.choices[0].message.content.strip()
+
+
+def update_keyword_info(goodsNo, old_keyword, new_keyword, cost, time, csv_path='total_brand_reviews_df.csv'):
+    """
+    해당 상품(goodsNo)의 real_keywords_all, real_keywords_dmg_dict에서 old_keyword를 new_keyword로 완전 교체,
+    비용(cost, 원), 시간(time, 시간)은 keyword_plan_info 컬럼의 dict로 저장.
+    """
+    import ast
+    import json
+    import pandas as pd
+    df = pd.read_csv(csv_path)
+
+    # ── 1. keyword_plan_info 컬럼이 없으면 생성 및 마이그레이션 ──
+    if 'keyword_plan_info' not in df.columns:
+        # 기존 cost/processing_time 컬럼이 있으면 마이그레이션
+        plan_info_col = []
+        for i, row in df.iterrows():
+            try:
+                kw_list = ast.literal_eval(row['real_keywords_all']) if pd.notnull(row['real_keywords_all']) else []
+            except Exception:
+                kw_list = []
+            plan_dict = {}
+            for kw in kw_list:
+                c = row['cost'] if 'cost' in df.columns and pd.notnull(row['cost']) else ''
+                t = row['processing_time'] if 'processing_time' in df.columns and pd.notnull(row['processing_time']) else ''
+                plan_dict[kw] = {"cost": c, "time": t}
+            plan_info_col.append(json.dumps(plan_dict, ensure_ascii=False))
+        df['keyword_plan_info'] = plan_info_col
+
+    # 상품별 행 인덱스
+    idxs = df[df['goodsNo'].astype(str) == str(goodsNo)].index
+    for idx in idxs:
+        # real_keywords_all: 문자열 -> 리스트
+        kw_list = ast.literal_eval(df.at[idx, 'real_keywords_all']) if pd.notnull(df.at[idx, 'real_keywords_all']) else []
+        # 완전 교체
+        kw_list = [new_keyword if kw == old_keyword else kw for kw in kw_list]
+        df.at[idx, 'real_keywords_all'] = str(kw_list)
+        # real_keywords_dmg_dict: 문자열 -> dict
+        dmg_dict = ast.literal_eval(df.at[idx, 'real_keywords_dmg_dict']) if pd.notnull(df.at[idx, 'real_keywords_dmg_dict']) else {}
+        # 키워드 교체 (값은 old_keyword의 값 유지)
+        if old_keyword in dmg_dict:
+            dmg_dict[new_keyword] = dmg_dict.pop(old_keyword)
+        df.at[idx, 'real_keywords_dmg_dict'] = str(dmg_dict)
+        # keyword_plan_info: 문자열 -> dict
+        plan_info = {}
+        if pd.notnull(df.at[idx, 'keyword_plan_info']):
+            try:
+                plan_info = json.loads(df.at[idx, 'keyword_plan_info'])
+            except Exception:
+                plan_info = {}
+        # 기존 값 옮기기 (old_keyword -> new_keyword)
+        if old_keyword in plan_info:
+            plan_info[new_keyword] = plan_info.pop(old_keyword)
+        # 값 저장
+        plan_info[new_keyword] = {"cost": cost, "time": time}
+        df.at[idx, 'keyword_plan_info'] = json.dumps(plan_info, ensure_ascii=False)
+    df.to_csv(csv_path, index=False, encoding='utf-8-sig')
+    return True
