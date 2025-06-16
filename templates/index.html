@@ -75,7 +75,16 @@
         </td>
         <td style="padding:0.7em; border:1px solid #ddd;">{{ p.rating }}</td>
         <td style="padding:0.7em; border:1px solid #ddd;">{{ p.damage_sum if p.damage_sum is not none else '-' }}</td>
-
+      </tr>
+      <tr>
+        <td colspan="3" style="padding:0.5em 0.7em; border:1px solid #ddd; background:#f9f9f9; color:#666; font-size:0.96em;">
+          <strong>상위 키워드:</strong>
+          {% if p.top5_keywords and p.top5_keywords|length > 0 %}
+            {{ p.top5_keywords|join(', ') }}
+          {% else %}
+            -
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>

@@ -6,7 +6,7 @@ logging.basicConfig(
 import matplotlib
 matplotlib.use('Agg')
 from flask import Flask, render_template, request, session, jsonify
-
+import numpy as np
 # ───────────────────────────────────────────────────────────────
 # 📊  Brand-reputation research → ₩ per DAMAGE-UNIT
 # ----------------------------------------------------------------
@@ -142,7 +142,8 @@ def index():
                     reviews_df = olive_reviews_crawl([goodsNo], limit=5)
                     if reviews_df is not None and not reviews_df.empty:
                         reviews_df["word_count"] = reviews_df["content"].str.split().apply(len)
-                        reviews_df["damage"] = 0.002*reviews_df["word_count"] + 0.219*reviews_df["photo_present"] + 0.279*reviews_df["top_rank_present"] + 0.279*reviews_df["badges_present"]
+                        from routes.damage_calc import calculate_damage
+                        reviews_df = calculate_damage(reviews_df)
                         reviews_df["keywords"] = reviews_df["content"].apply(extract_keywords_with_openai)
                         reviews_df["prd_link"] = prod.get('link', '')
                         reviews_df["prd_name"] = prod.get('name', '')
@@ -155,6 +156,9 @@ def index():
             total_brand_reviews_df = pd.concat(all_reviews, ignore_index=True)
             total_brand_reviews_df.to_csv('total_brand_reviews_df.csv', index=False, encoding='utf-8-sig')
             logging.info(f"[INFO] total_brand_reviews_df.csv 저장 완료: {len(total_brand_reviews_df)}건")
+            # --- 키워드 클러스터링 및 damage 집계 실행 ---
+            from keyword_clustering_and_damage import run_keyword_clustering_and_damage
+            run_keyword_clustering_and_damage('total_brand_reviews_df.csv')
         else:
             logging.info("[INFO] 수집된 리뷰 없음. total_brand_reviews_df.csv 미생성")
         logging.info(f"[TIMER] 전체 POST 처리 완료: {time.time() - t_post_start:.2f}s")
@@ -175,15 +179,30 @@ def index():
             'rating': 'mean',
             'damage': 'sum',
             'goodsNo': 'first',
-            'prd_link': 'first'
+            'prd_link': 'first',
+            'real_keywords_all': 'first'
         }).reset_index()
+        from review_utils import get_top5_keywords_from_list
         for _, row in grouped.iterrows():
+            real_keywords_all = []
+            if 'real_keywords_all' in row and pd.notnull(row['real_keywords_all']):
+                val = row['real_keywords_all']
+                if isinstance(val, str):
+                    import ast
+                    try:
+                        real_keywords_all = ast.literal_eval(val)
+                    except Exception:
+                        real_keywords_all = []
+                elif isinstance(val, list):
+                    real_keywords_all = val
+            top5_keywords = get_top5_keywords_from_list(real_keywords_all)
             products.append({
                 'goodsNo': row['goodsNo'],
                 'name': row['prd_name'],
                 'rating': round(row['rating'], 2) if pd.notnull(row['rating']) else '',
                 'damage_sum': round(row['damage'], 2) if pd.notnull(row['damage']) else 0,
-                'link': row['prd_link']
+                'link': row['prd_link'],
+                'top5_keywords': top5_keywords
             })
     return render_template(
         "index.html",

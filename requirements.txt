@@ -10,3 +10,4 @@ nltk
 openai
 openpyxl
 python-dotenv
+sentence-transformers
