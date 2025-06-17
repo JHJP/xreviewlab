@@ -146,7 +146,7 @@
                   .then(data => {
                     gptMeaning.textContent = data.meaning || '-';
                     editCost.value = data.cost || '';
-                    editTime.value = data.time || '';
+                    editTime.value = (data.time !== undefined && data.time !== null && data.time !== '') ? data.time : (data.processing_time || '');
                   });
                 modal.style.display = 'flex';
               });
