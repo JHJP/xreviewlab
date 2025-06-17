@@ -10,10 +10,25 @@
     <button type="submit" class="save-btn" style="margin-top:1em;">최적화 계산</button>
   </form>
 </div>
-{% if result %}
-<div class="card" style="margin-top:2em;">
-  <h3>최적화 결과</h3>
-  <pre>{{ result|safe }}</pre>
-</div>
+{% if result and result is string %}
+  <div class="card" style="margin-top:2em;">
+    <h3>오류</h3>
+    <div style="color:red;">{{ result|safe }}</div>
+  </div>
+{% elif result %}
+  <div class="card" style="margin-top:2em;">
+    <h3>실행 우선순위</h3>
+    <div style="overflow-x:auto;">{{ picked_html|safe }}</div>
+    <hr>
+    <h4>예산 한계효율 (break-points)</h4>
+    <div style="overflow-x:auto;">{{ bpB_html|safe }}</div>
+    <h4>시간 한계효율 (break-points)</h4>
+    <div style="overflow-x:auto;">{{ bpT_html|safe }}</div>
+    <hr>
+    <h4>누적 브랜드-데미지 감소 vs 예산·가용시간</h4>
+    {% if plot_url %}
+      <img src="{{ plot_url }}" alt="최적화 플롯" style="max-width:100%;height:auto;border:1px solid #eee;box-shadow:0 2px 12px rgba(0,0,0,0.06);margin-top:1em;">
+    {% endif %}
+  </div>
 {% endif %}
 {% endblock %}

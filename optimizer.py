@@ -33,8 +33,6 @@ font_prop = fm.FontProperties(fname=str(MY_FONT_PATH))
 plt.rcParams["font.family"] = font_prop.get_name()   # 내부 메타데이터의 ‘폰트 이름’ 자동 추출
 plt.rcParams["axes.unicode_minus"] = False           # 마이너스 기호 깨짐 방지
 
-print("✅ Matplotlib 기본 글꼴:", font_prop.get_name())
-
 CSV_PATH       = "total_brand_reviews_df.csv"
 
 # 기본 제약
@@ -98,15 +96,6 @@ def solve(budget=BUDGET_DEFAULT, time_av=TIME_DEFAULT):
     obj = pulp.value(m.objective)
     return sol, obj, m
 
-# ----------------- 3. LP-Relaxation Dual -------------------
-def lp_dual(model):
-    relax = model.copy()
-    for v in relax.variables(): v.cat = pulp.LpContinuous
-    relax.solve(pulp.PULP_CBC_CMD(msg=False))
-    dualB = relax.constraints["budget"].pi
-    dualT = relax.constraints["time"].pi
-    return dualB, dualT
-
 # ----------------- 4. Break-point Scanner ------------------
 def breakpoint_scan(axis="budget",
                     base_B=BUDGET_DEFAULT, base_T=TIME_DEFAULT):
@@ -114,15 +103,15 @@ def breakpoint_scan(axis="budget",
     축소 → 증가 방향으로 훑으며
     • DamageReduced 값이 변하는 지점(break-point)만 리턴
     """
-    step = STEP_BUDGET if axis=="budget" else STEP_TIME
+    step = int(STEP_BUDGET) if axis=="budget" else int(STEP_TIME)
     # 충분히 낮은 곳까지 감
     low = 0
     # 충분히 높은 곳까지
-    high = base_B*2 if axis=="budget" else base_T*2
+    high = int(base_B*2) if axis=="budget" else int(base_T*2)
 
     pts = []
     prev_obj = None
-    for val in range(low, high + step, step):
+    for val in range(int(low), int(high + step), int(step)):
         B, T = (val, base_T) if axis=="budget" else (base_B, val)
         _, obj, _ = solve(B, T)
         if obj != prev_obj:              # break-point
@@ -195,30 +184,55 @@ def nice_dual_plot(bpB, bpT):
     plt.tight_layout()
     plt.show()
 
-# ----------------- 5. Main Run ----------------------------
-if __name__ == "__main__":
-    # 5-A. Base MILP
-    sol_tbl, best_obj, base_model = solve()
+# ----------------- 5. Flask/Script Integration ----------------------------
+def run_optimizer(budget, time_av):
+    """
+    Run the optimizer and return picked table, budget/time breakpoints, and dual plot figure.
+    Args:
+        budget (float): available budget (원)
+        time_av (float): available time (시간)
+    Returns:
+        picked (pd.DataFrame): 실행 우선순위 표
+        bpB (pd.DataFrame): 예산 break-points
+        bpT (pd.DataFrame): 시간 break-points
+        fig (matplotlib.figure.Figure): dual plot figure
+    """
+    sol_tbl, best_obj, base_model = solve(budget, time_av)
     picked = (sol_tbl.query("selected")
                         .sort_values("damage", ascending=False)
                         .reset_index(drop=True))
-    print("\n=== 실행 우선순위 ===")
-    print(picked[["keyword","damage","cost","time"]])
+    bpB = add_marginal(breakpoint_scan("budget", base_B=budget, base_T=time_av), "budget")
+    bpT = add_marginal(breakpoint_scan("time", base_B=budget, base_T=time_av), "time")
+    # Generate plot but do not show
+    import matplotlib.pyplot as plt
+    fig, _ = plt.subplots(figsize=(7,4))
+    # Use the same plotting logic as nice_dual_plot, but draw on fig
+    # (reuse nice_dual_plot code but without plt.show())
+    # --- Plotting logic ---
+    ax = fig.gca()
+    # Budget curve
+    ax.step(bpB["Budget"], bpB["DamageReduced"], where='post', linewidth=2, label="누적 감소 – 예산")
+    for x, y in zip(bpB["Budget"], bpB["DamageReduced"]):
+        ax.text(x, y, f"{int(y)}", va='bottom', ha='center', fontsize=8, color='tab:blue')
+    # Top axis for Time
+    ax_top = ax.twiny()
+    ax_top.set_xlim(ax.get_xlim())
+    import numpy as np
+    x_t_proj = np.interp(bpT["Time"], (bpT["Time"].min(), bpT["Time"].max()), ax.get_xlim())
+    ax_top.set_xticks(x_t_proj)
+    ax_top.set_xticklabels(bpT["Time"])
+    ax_top.set_xlabel("Available Time (h)")
+    # Time curve
+    ax.step(x_t_proj, bpT["DamageReduced"], where='post', linestyle='--', linewidth=2, label="누적 감소 – 시간", dashes=(5,3))
+    for x, y in zip(x_t_proj, bpT["DamageReduced"]):
+        ax.text(x, y, f"{int(y)}", va='bottom', ha='center', fontsize=8, color='tab:orange')
+    # Common formatting
+    ax.set_xlabel("Budget (₩)")
+    ax.set_ylabel("Total Damage Reduced (pts)")
+    ax.set_title("누적 브랜드-데미지 감소 vs 예산·가용시간")
+    ax.grid(True, linestyle=':')
+    ax.legend()
+    fig.tight_layout()
+    return picked, bpB, bpT, fig
 
-    # 5-B. LP dual (upper-bound)
-    dB, dT = lp_dual(base_model)
-    print(f"\n[LP-Relaxation dual] 예산 1원 ↑ → ≤ {dB:.3f}점, "
-          f"시간 1h ↑ → ≤ {dT:.3f}점")
-
-    # 5-C. Budget break-points
-    bpB = add_marginal(breakpoint_scan("budget"), "budget")
-    print("\n--- 예산 한계효율 (break-points) ---")
-    print(bpB[["Budget","DamageReduced","MarginalEfficiency"]])
-
-    # 5-D. Time break-points
-    bpT = add_marginal(breakpoint_scan("time"), "time")
-    print("\n--- 시간 한계효율 (break-points) ---")
-    print(bpT[["Time","DamageReduced","MarginalEfficiency"]])
-
-    nice_dual_plot(bpB, bpT)
-
+# End of file
