@@ -43,6 +43,24 @@ TIME_DEFAULT   = 120          # person-hours
 STEP_BUDGET    = 10_000       # 1 만원
 STEP_TIME      = 1            # 1 시간
 
+COL_RENAME_MAIN = {
+    "keyword":  "문제 키워드",
+    "damage":   "위험 점수",
+    "cost":     "필요 예산(원)",
+    "time":     "필요 시간(시간)",
+    "selected": "이번에 처리"
+}
+COL_RENAME_BP_B = {            # Budget break-points 표
+    "Budget":            "투입 예산(원)",
+    "DamageReduced":      "줄어든 위험 점수",
+    "MarginalEfficiency": "추가 1 만원당 위험 감소(점)",
+}
+COL_RENAME_BP_T = {            # Time break-points 표
+    "Time":               "투입 시간(시간)",
+    "DamageReduced":      "줄어든 위험 점수",
+    "MarginalEfficiency": "추가 1 시간당 위험 감소(점)",
+}
+
 # ----------------- 1. Data Pre-processing ------------------
 df = pd.read_csv(CSV_PATH)
 
@@ -142,12 +160,12 @@ def nice_dual_plot(bpB, bpT):
     fig, ax = plt.subplots(figsize=(7,4))
 
     # ── [1] Budget 축 (아래 x-축) ───────────────────────
-    ax.step(bpB["Budget"], bpB["DamageReduced"],
+    ax.step(bpB["투입 예산(원)"], bpB["줄어든 위험 점수"],
             where='post', linewidth=2,
-            label="누적 감소 – 예산")
+            label="예산을 늘렸을 때")
 
     # 예산 라벨
-    for x, y in zip(bpB["Budget"], bpB["DamageReduced"]):
+    for x, y in zip(bpB["투입 예산(원)"], bpB["줄어든 위험 점수"]):
         ax.text(x, y, f"{int(y)}", va='bottom', ha='center',
                 fontsize=8, color='tab:blue')
 
@@ -156,29 +174,29 @@ def nice_dual_plot(bpB, bpT):
     ax_top.set_xlim(ax.get_xlim())
 
     # bpT 의 Time 값을 Budget 스케일로 선형 사상
-    x_t_proj = np.interp(bpT["Time"],
-                         (bpT["Time"].min(), bpT["Time"].max()),
+    x_t_proj = np.interp(bpT["투입 시간(시간)"],
+                         (bpT["투입 시간(시간)"].min(), bpT["투입 시간(시간)"].max()),
                          ax.get_xlim())
 
     # 위쪽 눈금 & 레이블
     ax_top.set_xticks(x_t_proj)
-    ax_top.set_xticklabels(bpT["Time"])
-    ax_top.set_xlabel("Available Time (h)")
+    ax_top.set_xticklabels(bpT["투입 시간(시간)"])
+    ax_top.set_xlabel("투입 시간 (h)")
 
     # 시간 곡선 (점선)
-    ax.step(x_t_proj, bpT["DamageReduced"],
+    ax.step(x_t_proj, bpT["줄어든 위험 점수"],
             where='post', linestyle='--', linewidth=2,
-            label="누적 감소 – 시간", dashes=(5,3))
+            label="시간을 늘렸을 때", dashes=(5,3))
 
     # 시간 라벨 – 주황색으로 구분
-    for x, y in zip(x_t_proj, bpT["DamageReduced"]):
+    for x, y in zip(x_t_proj, bpT["줄어든 위험 점수"]):
         ax.text(x, y, f"{int(y)}", va='bottom', ha='center',
                 fontsize=8, color='tab:orange')
 
     # ──[3] 공통 서식────────────────────────────────────
-    ax.set_xlabel("Budget (₩)")
-    ax.set_ylabel("Total Damage Reduced (pts)")
-    ax.set_title("누적 브랜드-데미지 감소 vs 예산·가용시간")
+    ax.set_xlabel("투입 예산 (₩)")
+    ax.set_ylabel("줄어든 브랜드 위험 점수")
+    # ax.set_title("누적 브랜드-데미지 감소 vs 예산·가용시간")
     ax.grid(True, linestyle=':')
     ax.legend()
     plt.tight_layout()
@@ -200,9 +218,12 @@ def run_optimizer(budget, time_av):
     sol_tbl, best_obj, base_model = solve(budget, time_av)
     picked = (sol_tbl.query("selected")
                         .sort_values("damage", ascending=False)
-                        .reset_index(drop=True))
-    bpB = add_marginal(breakpoint_scan("budget", base_B=budget, base_T=time_av), "budget")
-    bpT = add_marginal(breakpoint_scan("time", base_B=budget, base_T=time_av), "time")
+                        .reset_index(drop=True)
+                        .rename(columns=COL_RENAME_MAIN))
+    bpB = add_marginal(breakpoint_scan("budget"), "budget") \
+            .rename(columns=COL_RENAME_BP_B)
+    bpT = add_marginal(breakpoint_scan("time"), "time") \
+            .rename(columns=COL_RENAME_BP_T)
     # Generate plot but do not show
     import matplotlib.pyplot as plt
     fig, _ = plt.subplots(figsize=(7,4))
@@ -211,25 +232,25 @@ def run_optimizer(budget, time_av):
     # --- Plotting logic ---
     ax = fig.gca()
     # Budget curve
-    ax.step(bpB["Budget"], bpB["DamageReduced"], where='post', linewidth=2, label="누적 감소 – 예산")
-    for x, y in zip(bpB["Budget"], bpB["DamageReduced"]):
+    ax.step(bpB["투입 예산(원)"], bpB["줄어든 위험 점수"], where='post', linewidth=2, label="예산을 늘렸을 때")
+    for x, y in zip(bpB["투입 예산(원)"], bpB["줄어든 위험 점수"]):
         ax.text(x, y, f"{int(y)}", va='bottom', ha='center', fontsize=8, color='tab:blue')
     # Top axis for Time
     ax_top = ax.twiny()
     ax_top.set_xlim(ax.get_xlim())
     import numpy as np
-    x_t_proj = np.interp(bpT["Time"], (bpT["Time"].min(), bpT["Time"].max()), ax.get_xlim())
+    x_t_proj = np.interp(bpT["투입 시간(시간)"], (bpT["투입 시간(시간)"].min(), bpT["투입 시간(시간)"].max()), ax.get_xlim())
     ax_top.set_xticks(x_t_proj)
-    ax_top.set_xticklabels(bpT["Time"])
-    ax_top.set_xlabel("Available Time (h)")
+    ax_top.set_xticklabels(bpT["투입 시간(시간)"])
+    ax_top.set_xlabel("투입 시간 (h)")
     # Time curve
-    ax.step(x_t_proj, bpT["DamageReduced"], where='post', linestyle='--', linewidth=2, label="누적 감소 – 시간", dashes=(5,3))
-    for x, y in zip(x_t_proj, bpT["DamageReduced"]):
+    ax.step(x_t_proj, bpT["줄어든 위험 점수"], where='post', linestyle='--', linewidth=2, label="시간을 늘렸을 때", dashes=(5,3))
+    for x, y in zip(x_t_proj, bpT["줄어든 위험 점수"]):
         ax.text(x, y, f"{int(y)}", va='bottom', ha='center', fontsize=8, color='tab:orange')
     # Common formatting
-    ax.set_xlabel("Budget (₩)")
-    ax.set_ylabel("Total Damage Reduced (pts)")
-    ax.set_title("누적 브랜드-데미지 감소 vs 예산·가용시간")
+    ax.set_xlabel("투입 예산 (₩)")
+    ax.set_ylabel("줄어든 브랜드 위험 점수")
+    # ax.set_title("누적 브랜드-데미지 감소 vs 예산·가용시간")
     ax.grid(True, linestyle=':')
     ax.legend()
     fig.tight_layout()
