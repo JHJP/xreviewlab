@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from review_utils import get_keyword_meaning_rag, update_keyword_info
+import logging
 
 product_bp = Blueprint('product', __name__)
 
@@ -153,21 +154,32 @@ def get_keyword_info(goodsNo, keyword):
 from flask import render_template
 @product_bp.route('/plan', methods=['GET', 'POST'])
 def plan():
+    import io, base64
+    import traceback
+    from optimizer import run_optimizer
     result = None
+    plot_url = None
+    picked_html = bpB_html = bpT_html = None
     if request.method == 'POST':
         budget = request.form.get('budget', type=float)
         hours = request.form.get('hours', type=float)
-        # Gurobi optimizer 호출
-        import os
-        import pandas as pd
-        from optimizer_gurobi_robust_MILP import optimize
-        csv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'total_brand_reviews_df.csv')
         try:
-            rec_df, sens = optimize(csv_path, budget, hours)
-            result = rec_df.to_html(index=False) + '<hr>' + '<pre>' + str(sens) + '</pre>'
+            picked, fig = run_optimizer(budget, hours)
+            # DataFrame to HTML table
+            picked_html = picked.to_html(index=False, classes='table table-striped', border=0, justify='center')
+            # Plot to base64
+            img_io = io.BytesIO()
+            fig.savefig(img_io, format='png', bbox_inches='tight', dpi=200)
+            img_io.seek(0)
+            plot_url = 'data:image/png;base64,' + base64.b64encode(img_io.getvalue()).decode('utf8')
+            result = True
+            print("DEBUG: run_optimizer OK", flush=True)
         except Exception as e:
-            result = f'<span style="color:red;">오류: {e}</span>'
-    return render_template('plan.html', result=result)
+            tb = traceback.format_exc()
+            print("ERROR:", e, flush=True)
+            print(traceback.format_exc(), flush=True)
+            result = f'<span style="color:red;">오류: {e}<br><pre>{tb}</pre></span>'
+    return render_template('plan.html', result=result, picked_html=picked_html, plot_url=plot_url)
 
 
 @product_bp.route('/product/<goodsNo>/keyword/<keyword>', methods=['POST'])
