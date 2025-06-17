@@ -164,11 +164,9 @@ def plan():
         budget = request.form.get('budget', type=float)
         hours = request.form.get('hours', type=float)
         try:
-            picked, bpB, bpT, fig = run_optimizer(budget, hours)
-            # DataFrames to HTML tables
+            picked, fig = run_optimizer(budget, hours)
+            # DataFrame to HTML table
             picked_html = picked.to_html(index=False, classes='table table-striped', border=0, justify='center')
-            bpB_html = bpB[["Budget","DamageReduced","MarginalEfficiency"]].to_html(index=False, classes='table table-sm', border=0, justify='center')
-            bpT_html = bpT[["Time","DamageReduced","MarginalEfficiency"]].to_html(index=False, classes='table table-sm', border=0, justify='center')
             # Plot to base64
             img_io = io.BytesIO()
             fig.savefig(img_io, format='png', bbox_inches='tight', dpi=200)
@@ -181,7 +179,7 @@ def plan():
             print("ERROR:", e, flush=True)
             print(traceback.format_exc(), flush=True)
             result = f'<span style="color:red;">오류: {e}<br><pre>{tb}</pre></span>'
-    return render_template('plan.html', result=result, picked_html=picked_html, bpB_html=bpB_html, bpT_html=bpT_html, plot_url=plot_url)
+    return render_template('plan.html', result=result, picked_html=picked_html, plot_url=plot_url)
 
 
 @product_bp.route('/product/<goodsNo>/keyword/<keyword>', methods=['POST'])

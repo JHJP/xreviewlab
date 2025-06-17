@@ -233,6 +233,6 @@ def run_optimizer(budget, time_av):
     ax.grid(True, linestyle=':')
     ax.legend()
     fig.tight_layout()
-    return picked, bpB, bpT, fig
+    return picked, fig
 
 # End of file

@@ -10,25 +10,27 @@
     <button type="submit" class="save-btn" style="margin-top:1em;">최적화 계산</button>
   </form>
 </div>
+<div id="plan-result-container">
 {% if result and result is string %}
-  <div class="card" style="margin-top:2em;">
+  <div class="card" id="plan-result-card" style="margin-top:2em;">
     <h3>오류</h3>
     <div style="color:red;">{{ result|safe }}</div>
   </div>
 {% elif result %}
-  <div class="card" style="margin-top:2em;">
+  <div class="card" id="plan-result-card" style="margin-top:2em;">
     <h3>실행 우선순위</h3>
     <div style="overflow-x:auto;">{{ picked_html|safe }}</div>
-    <hr>
-    <h4>예산 한계효율 (break-points)</h4>
-    <div style="overflow-x:auto;">{{ bpB_html|safe }}</div>
-    <h4>시간 한계효율 (break-points)</h4>
-    <div style="overflow-x:auto;">{{ bpT_html|safe }}</div>
-    <hr>
-    <h4>누적 브랜드-데미지 감소 vs 예산·가용시간</h4>
-    {% if plot_url %}
-      <img src="{{ plot_url }}" alt="최적화 플롯" style="max-width:100%;height:auto;border:1px solid #eee;box-shadow:0 2px 12px rgba(0,0,0,0.06);margin-top:1em;">
-    {% endif %}
+  </div>
+  <div class="card" style="margin-top:1.5em; box-shadow: var(--shadow-m);">
+    <h3 style="color:var(--clr-indigo-d);margin-bottom:.6em;">누적 브랜드-데미지 감소 vs 예산·가용시간</h3>
+    <div style="display:flex;justify-content:center;align-items:center;min-height:240px;background:linear-gradient(90deg,#f1f4ff 0%,#f8f9fb 100%);border-radius:10px;box-shadow:0 2px 12px rgba(92,59,255,0.06);padding:1.5em;">
+      {% if plot_url %}
+        <img src="{{ plot_url }}" alt="최적화 플롯" style="max-width:100%;height:auto;box-shadow:0 2px 12px rgba(92,59,255,0.08);border-radius:8px;">
+      {% endif %}
+    </div>
   </div>
 {% endif %}
+</div>
+<link rel="stylesheet" href="{{ url_for('static', filename='spinner.css') }}">
+<script src="{{ url_for('static', filename='plan.js') }}"></script>
 {% endblock %}
