@@ -156,9 +156,6 @@ def index():
             total_brand_reviews_df = pd.concat(all_reviews, ignore_index=True)
             total_brand_reviews_df.to_csv('total_brand_reviews_df.csv', index=False, encoding='utf-8-sig')
             logging.info(f"[INFO] total_brand_reviews_df.csv 저장 완료: {len(total_brand_reviews_df)}건")
-            # --- 키워드 클러스터링 및 damage 집계 실행 ---
-            from keyword_clustering_and_damage import run_keyword_clustering_and_damage
-            run_keyword_clustering_and_damage('total_brand_reviews_df.csv')
         else:
             logging.info("[INFO] 수집된 리뷰 없음. total_brand_reviews_df.csv 미생성")
         logging.info(f"[TIMER] 전체 POST 처리 완료: {time.time() - t_post_start:.2f}s")
@@ -219,12 +216,17 @@ def voc_listen():
     # Run the main index logic (crawling, saving, etc)
     with app.test_request_context('/', method='POST', data={'brand_name': brand_name or '', 'brand_url': brand_url or ''}):
         response = index()
-    # After crawling, run embedding computation
+    # After crawling, run the follwing functions
+    # --- 키워드 클러스터링 및 damage 집계 실행 ---
+    from keyword_clustering_and_damage import run_keyword_clustering_and_damage
+    try:
+        run_keyword_clustering_and_damage('total_brand_reviews_df.csv')
+    except Exception as e:
+        logging.error(f"[Damage 계산 오류] {e}")
     from embed_reviews import compute_review_embeddings
     try:
         compute_review_embeddings()
     except Exception as e:
-        import logging
         logging.error(f"[임베딩 오류] {e}")
     return response
 
