@@ -1,259 +1,315 @@
-"""
-========================================================
- Brand-Risk Optimizer & Sensitivity Toolkit  v2
---------------------------------------------------------
-  • 0-1 MILP  (CBC / HiGHS)
-  • LP-relaxation dual  (upper-bound shadow price)
-  • Break-point scanning  →  Discrete shadow price table
---------------------------------------------------------
- author : (your name) | updated : 2025-06-17
-========================================================
-"""
-# ----------------- 0. Imports & Parameters -----------------
-import pandas as pd, numpy as np, ast
-import pulp, math
-# ─── 한글 글꼴 수동 등록 & 설정 ──────────────────────────
-import matplotlib.pyplot as plt
+# ----------------- 0. Imports -----------------------------
+import pandas as pd, numpy as np, ast, math, functools
+import pulp, matplotlib.pyplot as plt
 from matplotlib import font_manager as fm
 from pathlib import Path
-import matplotlib.pyplot as plt
-from matplotlib import font_manager as fm
-from pathlib import Path
+from matplotlib.ticker import FuncFormatter
+from tqdm import tqdm
+import matplotlib.pyplot as plt, matplotlib.patheffects as pe
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.ticker import FuncFormatter
 
-# ── ❷ 내 폰트 파일 경로 지정 ────────────────────
+# ── ❶ 내 폰트 파일 경로 지정 ───────────────────────────────
 MY_FONT_PATH = Path(
     r"C:\Users\papag\OneDrive\desktop\Business\ORM\App\MVP_gurobi\fonts\GamjaFlower-Regular.ttf"
-)  # ← 여기만 내 파일로 바꿔 주세요
+)  # ← 필요 시 변경
 
-# ── ❸ Matplotlib 폰트 매니저에 등록(한 번만) ────
-fm.fontManager.addfont(str(MY_FONT_PATH))        # Matplotlib >= 3.2
+# ── ❷ Matplotlib 폰트 등록 ───────────────────────────────
+fm.fontManager.addfont(str(MY_FONT_PATH))
 font_prop = fm.FontProperties(fname=str(MY_FONT_PATH))
+plt.rcParams["font.family"] = font_prop.get_name()
+plt.rcParams["axes.unicode_minus"] = False
 
-# ── ❹ 전역 기본 글꼴로 설정 ─────────────────────
-plt.rcParams["font.family"] = font_prop.get_name()   # 내부 메타데이터의 ‘폰트 이름’ 자동 추출
-plt.rcParams["axes.unicode_minus"] = False           # 마이너스 기호 깨짐 방지
+# ❶ 퍼플(#5F3BFF) → 화이트 → 그린(#00C49A) 커스텀 컬러맵
+_brand_cmap = LinearSegmentedColormap.from_list(
+    "brand_pg", ["#5F3BFF", "#FFFFFF", "#00C49A"], N=256)
 
-CSV_PATH       = "total_brand_reviews_df.csv"
 
-# 기본 제약
-BUDGET_DEFAULT = 300_000      # ₩
-TIME_DEFAULT   = 120          # person-hours
-
-# 스캔 단위
-STEP_BUDGET    = 10_000       # 1 만원
-STEP_TIME      = 1            # 1 시간
-
-COL_RENAME_MAIN = {
-    "keyword":  "문제 키워드",
-    "damage":   "위험 점수",
-    "cost":     "필요 예산(원)",
-    "time":     "필요 시간(시간)",
-    "selected": "이번에 처리"
-}
-COL_RENAME_BP_B = {            # Budget break-points 표
-    "Budget":            "투입 예산(원)",
-    "DamageReduced":      "줄어든 위험 점수",
-    "MarginalEfficiency": "추가 1 만원당 위험 감소(점)",
-}
-COL_RENAME_BP_T = {            # Time break-points 표
-    "Time":               "투입 시간(시간)",
-    "DamageReduced":      "줄어든 위험 점수",
-    "MarginalEfficiency": "추가 1 시간당 위험 감소(점)",
-}
-
-# ----------------- 1. Data Pre-processing ------------------
+# ----------------- 1. Load data ---------------------------
+CSV_PATH = "total_brand_reviews_df.csv"
 df = pd.read_csv(CSV_PATH)
 
-# --- 1-A. keyword ↔ damage -------------------------------
+# 1-A. (상품, 키워드) ↔ damage ------------------------------
 km_rows = []
-for d in df["real_keywords_dmg_dict"].dropna():
-    km_rows.extend(ast.literal_eval(d).items())
+for _, r in df[["prd_name", "real_keywords_dmg_dict"]].dropna().iterrows():
+    for kw, dmg in ast.literal_eval(r["real_keywords_dmg_dict"]).items():
+        km_rows.append({"prd_name": r["prd_name"], "keyword": kw, "damage": dmg})
+kw_damage = pd.DataFrame(km_rows).groupby(["prd_name", "keyword"], as_index=False).sum()
 
-kw_damage = (pd.DataFrame(km_rows, columns=["keyword","damage"])
-               .groupby("keyword", as_index=False)
-               .sum())
-
-# --- 1-B. keyword ↔ cost / time --------------------------
+# 1-B. (상품, 키워드) ↔ cost / time -------------------------
 plan_rows = []
-for d in df["keyword_plan_info"].dropna():
-    for kw, info in ast.literal_eval(d).items():
+for _, r in df[["prd_name", "keyword_plan_info"]].dropna().iterrows():
+    for kw, info in ast.literal_eval(r["keyword_plan_info"]).items():
         plan_rows.append({
+            "prd_name": r["prd_name"],
             "keyword": kw,
-            "cost":   pd.to_numeric(info.get("cost", ""), errors="coerce"),
-            "time":   pd.to_numeric(info.get("time", ""), errors="coerce")
+            "cost": pd.to_numeric(str(info.get("cost", "")).replace(",", ""), errors="coerce"),
+            "time": pd.to_numeric(str(info.get("time", "")).replace(",", ""), errors="coerce"),
         })
-
 kw_plan = (pd.DataFrame(plan_rows)
-             .groupby("keyword")
-             .agg({"cost":"max", "time":"max"})
-             .fillna(0)
-             .reset_index())
+           .groupby(["prd_name", "keyword"])
+           .agg({"cost": "max", "time": "max"})
+           .fillna(0)
+           .reset_index())
 
-# --- 1-C. Final table for optimization -------------------
-tbl = (kw_damage.merge(kw_plan, on="keyword", how="left")
-                .fillna({"cost":0,"time":0})
-                .query("cost>0 | time>0")          # 둘 다 0 → 제외
-                .reset_index(drop=True))
+# 1-C. 최종 테이블 ------------------------------------------
+tbl = (kw_damage.merge(kw_plan, on=["prd_name", "keyword"], how="left")
+                  .fillna({"cost": 0, "time": 0})
+                  .query("cost > 0 | time > 0")        # 둘 다 0 인 항목은 제외
+                  .reset_index(drop=True))
 
-print(f"[INFO] 최적화 대상 키워드 : {len(tbl)}개")
+TOTAL_DAMAGE = tbl["damage"].sum()
 
-# ----------------- 2. MILP Model Builder -------------------
-def build_model(budget, time_av):
+# ----------------- 2. 파라미터 ------------------------------
+def _nice_round(x, base=10_000):
+    return int(math.ceil(x / base) * base)
+
+def _derive_dynamic_params(t: pd.DataFrame):
+    n = len(t)
+    median_c = t["cost"].median()
+    step_B = _nice_round(max(10_000, median_c / 4), 10_000)
+    B_def = _nice_round(min(t["cost"].sum()*0.3, median_c*max(10, n*0.1)), step_B)
+
+    positive_times = t.loc[t["time"] > 0, "time"].astype(int)
+    step_T = max(1, functools.reduce(math.gcd, positive_times) if len(positive_times) else 1)
+    median_t = t["time"].median()
+    T_def = int(min(t["time"].sum()*0.3, median_t*max(10, n*0.1)))
+
+    return B_def, T_def, step_B, step_T
+
+BDEF, TDEF, STEP_B, STEP_T = _derive_dynamic_params(tbl)
+print(f"[AUTO] 기본 예산  : {BDEF:,.0f} 원")
+print(f"[AUTO] 기본 시간  : {TDEF:,.0f} h")
+print(f"[AUTO] 예산 단위 : {STEP_B:,.0f} 원")
+print(f"[AUTO] 시간 단위 : {STEP_T} h")
+
+# ----------------- 3. 컬럼 rename ---------------------------
+COL_MAIN = {"prd_name": "상품", "keyword": "문제 키워드", "damage": "위험 점수",
+            "cost": "필요 예산(원)", "time": "필요 시간(시간)", "selected": "이번에 처리"}
+COL_BP_B = {"Budget": "투입 예산(원)", "RiskScore": "브랜드 평판 위험점수",
+            "MarginalEfficiency": f"추가 {STEP_B//10_000:d} 만원당 위험 감소(점)"}
+COL_BP_T = {"Time": "투입 시간(시간)", "RiskScore": "브랜드 평판 위험점수",
+            "MarginalEfficiency": f"추가 {STEP_T} 시간당 위험 감소(점)"}
+
+# ----------------- 4. 내부 단위 ------------------------------
+tbl["cost_unit"] = np.ceil(tbl["cost"] / STEP_B).astype(int)
+tbl["time_unit"] = np.ceil(tbl["time"] / STEP_T).astype(int)
+
+# ----------------- 5. MILP ---------------------------------
+def _build_model(bu, tu):
     m = pulp.LpProblem("BrandRisk", pulp.LpMaximize)
     x = pulp.LpVariable.dicts("x", tbl.index, cat="Binary")
-    m += pulp.lpSum(tbl.loc[i,"damage"] * x[i] for i in tbl.index), "TotalDamage"
-    m += pulp.lpSum(tbl.loc[i,"cost"]  * x[i] for i in tbl.index) <= budget, "budget"
-    m += pulp.lpSum(tbl.loc[i,"time"]  * x[i] for i in tbl.index) <= time_av, "time"
+    m += pulp.lpSum(tbl.loc[i, "damage"] * x[i] for i in tbl.index)
+    m += pulp.lpSum(tbl.loc[i, "cost_unit"] * x[i] for i in tbl.index) <= bu, "budget"
+    m += pulp.lpSum(tbl.loc[i, "time_unit"] * x[i] for i in tbl.index) <= tu, "time"
     return m, x
 
-def solve(budget=BUDGET_DEFAULT, time_av=TIME_DEFAULT):
-    m, x = build_model(budget, time_av)
+def solve(budget=None, time_av=None, *, step_B=STEP_B, step_T=STEP_T):
+    """
+    budget, time_av 가 None ⇒ 기본값(BDEF, TDEF) 사용
+    0은 **실제로 0** 으로 처리한다.
+    """
+    bu = int(((BDEF if budget is None else budget)   ) // step_B)
+    tu = int(((TDEF if time_av is None else time_av) ) // step_T)
+    m, x = _build_model(bu, tu)
     m.solve(pulp.PULP_CBC_CMD(msg=False))
     sol = tbl.copy()
     sol["selected"] = [bool(x[i].value()) for i in tbl.index]
-    obj = pulp.value(m.objective)
-    return sol, obj, m
+    return sol, pulp.value(m.objective)   # 제거된 damage
 
-# ----------------- 4. Break-point Scanner ------------------
-def breakpoint_scan(axis="budget",
-                    base_B=BUDGET_DEFAULT, base_T=TIME_DEFAULT):
+# ----------------- 6. Break-points -------------------------
+def _scan(axis, step_B, step_T):
     """
-    축소 → 증가 방향으로 훑으며
-    • DamageReduced 값이 변하는 지점(break-point)만 리턴
+    axis ∈ {'budget','time'}
+    스캔하는 축만 0~High 로, 다른 축은 사실상 제약이 없도록 '최대치' 로 둔다.
     """
-    step = int(STEP_BUDGET) if axis=="budget" else int(STEP_TIME)
-    # 충분히 낮은 곳까지 감
-    low = 0
-    # 충분히 높은 곳까지
-    high = int(base_B*2) if axis=="budget" else int(base_T*2)
+    total_cost_units = tbl["cost_unit"].sum()
+    total_time_units = tbl["time_unit"].sum()
 
-    pts = []
-    prev_obj = None
-    for val in range(int(low), int(high + step), int(step)):
-        B, T = (val, base_T) if axis=="budget" else (base_B, val)
-        _, obj, _ = solve(B, T)
-        if obj != prev_obj:              # break-point
-            pts.append({"Budget":B, "Time":T, "DamageReduced":obj})
-            prev_obj = obj
+    if axis == "budget":
+        high   = total_cost_units * step_B
+        step   = step_B
+        fixedT = total_time_units * step_T   # 충분히 큰 시간
+    else:
+        high   = total_time_units * step_T
+        step   = step_T
+        fixedB = total_cost_units * step_B   # 충분히 큰 예산
+
+    pts, prev = [], None
+    for val in range(0, int(high + step), int(step)):
+        if axis == "budget":
+            B, T = val, fixedT
+        else:
+            B, T = fixedB, val
+        _, dmg_removed = solve(B, T, step_B=step_B, step_T=step_T)
+        risk_now = TOTAL_DAMAGE - dmg_removed
+        if risk_now != prev:
+            pts.append({"Budget": B, "Time": T, "RiskScore": risk_now})
+            prev = risk_now
     return pd.DataFrame(pts)
 
-def add_marginal(df, axis="budget"):
-    col = "Budget" if axis=="budget" else "Time"
+def _add_marginal(df, axis):
+    col = "Budget" if axis == "budget" else "Time"
     df = df.sort_values(col).reset_index(drop=True)
-    df["Δ"+col] = df[col].diff().fillna(np.nan)
-    df["MarginalEfficiency"] = df["DamageReduced"].diff() / df["Δ"+col]
+    df["Δ" + col] = df[col].diff()
+    df["RiskDecrease"] = df["RiskScore"].shift(1) - df["RiskScore"]
+    df["MarginalEfficiency"] = df["RiskDecrease"] / df["Δ" + col]
     return df
 
-# -----------------------------------------------
-# 6. 투자 효율 시각화 (Budget vs Time 한눈에)
-# -----------------------------------------------
-def nice_dual_plot(bpB, bpT):
-    """
-    bpB : break-point DataFrame(예산)
-    bpT : break-point DataFrame(시간)
-    두 곡선을 하나의 Figure에 겹쳐 그리고,
-    각 break-point마다 누적 Damage 값을 라벨링.
-    """
-    import matplotlib.pyplot as plt
+# ----------------- 7. Plot --------------------------------
+def _dual_plot(bpB, bpT):
     import numpy as np
+    fig, ax = plt.subplots(figsize=(10, 5), dpi=110)
 
-    fig, ax = plt.subplots(figsize=(7,4))
+    # ── ❶ 예산 축 ──────────────────────────────────────────
+    ax.step(bpB["투입 예산(원)"], bpB["브랜드 평판 위험점수"],
+            where="post", lw=2.2, label="예산을 늘렸을 때")
+    for x, y in zip(bpB["투입 예산(원)"], bpB["브랜드 평판 위험점수"]):
+        ax.annotate(f"{int(y)}", (x, y),
+                    textcoords="offset points", xytext=(0, 6),
+                    ha="center", va="bottom",
+                    fontsize=7, fontweight="bold", color="tab:blue",
+                    bbox=dict(boxstyle="round,pad=0.15", fc="white", alpha=.8, ec="none"))
 
-    # ── [1] Budget 축 (아래 x-축) ───────────────────────
-    ax.step(bpB["투입 예산(원)"], bpB["줄어든 위험 점수"],
-            where='post', linewidth=2,
-            label="예산을 늘렸을 때")
+    # ── ❷ 시간 축(상단) ────────────────────────────────────
+    ax2 = ax.twiny()
+    ax2.set_xlim(ax.get_xlim())
+    xproj = np.interp(
+        bpT["투입 시간(시간)"],
+        (bpT["투입 시간(시간)"].min(), bpT["투입 시간(시간)"].max()),
+        ax.get_xlim(),
+    )
+    ax2.set_xticks(xproj)
+    ax2.set_xticklabels(bpT["투입 시간(시간)"].astype(int))
+    ax2.set_xlabel("투입 시간 (h)")
 
-    # 예산 라벨
-    for x, y in zip(bpB["투입 예산(원)"], bpB["줄어든 위험 점수"]):
-        ax.text(x, y, f"{int(y)}", va='bottom', ha='center',
-                fontsize=8, color='tab:blue')
+    ax.step(xproj, bpT["브랜드 평판 위험점수"],
+            where="post", ls="--", lw=2.2, label="시간을 늘렸을 때", dashes=(6, 3))
+    for x_, y in zip(xproj, bpT["브랜드 평판 위험점수"]):
+        ax.annotate(f"{int(y)}", (x_, y),
+                    textcoords="offset points", xytext=(0, -10),
+                    ha="center", va="top",
+                    fontsize=7, fontweight="bold", color="tab:orange",
+                    bbox=dict(boxstyle="round,pad=0.15", fc="white", alpha=.8, ec="none"))
 
-    # ── [2] Time 축 (위쪽 x-축) ───────────────────────
-    ax_top = ax.twiny()
-    ax_top.set_xlim(ax.get_xlim())
-
-    # bpT 의 Time 값을 Budget 스케일로 선형 사상
-    x_t_proj = np.interp(bpT["투입 시간(시간)"],
-                         (bpT["투입 시간(시간)"].min(), bpT["투입 시간(시간)"].max()),
-                         ax.get_xlim())
-
-    # 위쪽 눈금 & 레이블
-    ax_top.set_xticks(x_t_proj)
-    ax_top.set_xticklabels(bpT["투입 시간(시간)"])
-    ax_top.set_xlabel("투입 시간 (h)")
-
-    # 시간 곡선 (점선)
-    ax.step(x_t_proj, bpT["줄어든 위험 점수"],
-            where='post', linestyle='--', linewidth=2,
-            label="시간을 늘렸을 때", dashes=(5,3))
-
-    # 시간 라벨 – 주황색으로 구분
-    for x, y in zip(x_t_proj, bpT["줄어든 위험 점수"]):
-        ax.text(x, y, f"{int(y)}", va='bottom', ha='center',
-                fontsize=8, color='tab:orange')
-
-    # ──[3] 공통 서식────────────────────────────────────
+    # ── ❸ 축 설정 & 스타일 ─────────────────────────────────
+    comma_fmt = FuncFormatter(lambda x, pos: f"{x:,.0f}")
+    ax.xaxis.set_major_formatter(comma_fmt)
     ax.set_xlabel("투입 예산 (₩)")
-    ax.set_ylabel("줄어든 브랜드 위험 점수")
-    # ax.set_title("누적 브랜드-데미지 감소 vs 예산·가용시간")
-    ax.grid(True, linestyle=':')
+    ax.set_ylabel("브랜드 평판 위험점수")
+    ax.set_xlim(left=-STEP_B)                     # 0 지점 여백
+    ax.grid(True, ls=":", alpha=.6)
     ax.legend()
     plt.tight_layout()
-    plt.show()
+    return fig
 
-# ----------------- 5. Flask/Script Integration ----------------------------
-def run_optimizer(budget, time_av):
+# ----------------- 7-A. 위험표(surface) 만들기 -----------------
+def _build_risk_surface(step_B=None, step_T=None,
+                        max_B=None, max_T=None, progress=True):
     """
-    Run the optimizer and return picked table, budget/time breakpoints, and dual plot figure.
-    Args:
-        budget (float): available budget (원)
-        time_av (float): available time (시간)
-    Returns:
-        picked (pd.DataFrame): 실행 우선순위 표
-        bpB (pd.DataFrame): 예산 break-points
-        bpT (pd.DataFrame): 시간 break-points
-        fig (matplotlib.figure.Figure): dual plot figure
+    그리드 해상도를 (기본*multiplier) 로 축소해 연산량을 줄인다.
     """
-    sol_tbl, best_obj, base_model = solve(budget, time_av)
-    picked = (sol_tbl.query("selected")
-                        .sort_values("damage", ascending=False)
-                        .reset_index(drop=True)
-                        .rename(columns=COL_RENAME_MAIN))
-    bpB = add_marginal(breakpoint_scan("budget"), "budget") \
-            .rename(columns=COL_RENAME_BP_B)
-    bpT = add_marginal(breakpoint_scan("time"), "time") \
-            .rename(columns=COL_RENAME_BP_T)
-    # Generate plot but do not show
-    import matplotlib.pyplot as plt
-    fig, _ = plt.subplots(figsize=(7,4))
-    # Use the same plotting logic as nice_dual_plot, but draw on fig
-    # (reuse nice_dual_plot code but without plt.show())
-    # --- Plotting logic ---
-    ax = fig.gca()
-    # Budget curve
-    ax.step(bpB["투입 예산(원)"], bpB["줄어든 위험 점수"], where='post', linewidth=2, label="예산을 늘렸을 때")
-    for x, y in zip(bpB["투입 예산(원)"], bpB["줄어든 위험 점수"]):
-        ax.text(x, y, f"{int(y)}", va='bottom', ha='center', fontsize=8, color='tab:blue')
-    # Top axis for Time
-    ax_top = ax.twiny()
-    ax_top.set_xlim(ax.get_xlim())
-    import numpy as np
-    x_t_proj = np.interp(bpT["투입 시간(시간)"], (bpT["투입 시간(시간)"].min(), bpT["투입 시간(시간)"].max()), ax.get_xlim())
-    ax_top.set_xticks(x_t_proj)
-    ax_top.set_xticklabels(bpT["투입 시간(시간)"])
-    ax_top.set_xlabel("투입 시간 (h)")
-    # Time curve
-    ax.step(x_t_proj, bpT["줄어든 위험 점수"], where='post', linestyle='--', linewidth=2, label="시간을 늘렸을 때", dashes=(5,3))
-    for x, y in zip(x_t_proj, bpT["줄어든 위험 점수"]):
-        ax.text(x, y, f"{int(y)}", va='bottom', ha='center', fontsize=8, color='tab:orange')
-    # Common formatting
+    # ── ❶ STEP 자동 확대: 기본 STEP 의 k배
+    step_B = step_B or STEP_B * 3      # ← multiplier 조정
+    step_T = step_T or STEP_T * 4
+
+    max_B = max_B or tbl["cost"].sum()
+    max_T = max_T or tbl["time"].sum()
+
+    B_vals = np.arange(0, max_B + step_B, step_B, dtype=int)
+    T_vals = np.arange(0, max_T + step_T, step_T, dtype=int)
+    Z = np.zeros((len(T_vals), len(B_vals)))
+
+    iterator = tqdm(list(enumerate(T_vals)), disable=not progress,
+                    desc="💡 building risk surface", unit="rows")
+
+    for i, T in iterator:
+        for j, B in enumerate(B_vals):
+            _, dmg_removed = solve(B, T, step_B=STEP_B, step_T=STEP_T)
+            Z[i, j] = TOTAL_DAMAGE - dmg_removed
+
+    return B_vals, T_vals, Z
+
+# ----------------- 7-B. Contour + Heat-map -------------------
+def plot_heatmap_contour(B_vals, T_vals, Z,
+                         user_B=None, user_T=None,
+                         fig_size=(9, 7), dpi=130):
+    """
+    Budget × Time 리스크 맵 — 앱 UI 친화형.
+    user_B, user_T: 입력창에서 사용자가 넣은 숫자 → 포인트로 표시.
+    """
+    fig, ax = plt.subplots(figsize=fig_size, dpi=dpi)
+
+    # ── Heat-map ─────────────────────────────────────────────
+    im = ax.imshow(Z, origin="lower",
+                   extent=[B_vals.min(), B_vals.max(),
+                           T_vals.min(), T_vals.max()],
+                   aspect="auto", cmap=_brand_cmap)
+
+    # ── Contour + 숫자라벨 (화이트 스트로크) ────────────────
+    levels = sorted({int(v) for v in np.linspace(Z.min(), Z.max(), 15)})
+    CS = ax.contour(B_vals, T_vals, Z, levels=levels,
+                    colors="black", linewidths=0.7, alpha=.8)
+
+    fmt = {lev: f"{lev:d}" for lev in levels}
+    txts = ax.clabel(CS, levels=levels, fmt=fmt, fontsize=8, inline=True)
+    # 흰색 외곽선 효과
+    for t in txts:
+        t.set_path_effects([pe.Stroke(linewidth=2.5, foreground="white"),
+                            pe.Normal()])
+
+    # ── 사용자 입력 지점 표시 ────────────────────────────────
+    if user_B is not None and user_T is not None:
+        ax.scatter(user_B, user_T, s=80, c="#1E88E5", marker="o",
+                   edgecolors="white", linewidths=1.2, zorder=5)
+        ax.annotate("현재 입력값",
+                    (user_B, user_T), xytext=(10, -15),
+                    textcoords="offset points",
+                    color="#1E88E5", fontsize=9, fontweight="bold",
+                    bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="#1E88E5"))
+
+    # ── 축 포맷 ─────────────────────────────────────────────
+    comma_fmt = FuncFormatter(lambda x, p: f"{x:,.0f}")
+    ax.xaxis.set_major_formatter(comma_fmt)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda y, p: f"{y:.0f}"))
+
     ax.set_xlabel("투입 예산 (₩)")
-    ax.set_ylabel("줄어든 브랜드 위험 점수")
-    # ax.set_title("누적 브랜드-데미지 감소 vs 예산·가용시간")
-    ax.grid(True, linestyle=':')
-    ax.legend()
-    fig.tight_layout()
+    ax.set_ylabel("투입 시간 (h)")
+    ax.set_title("Budget × Time 별 예상 브랜드 위험점수", pad=15, fontsize=14,
+                 fontweight="bold")
+
+    # ── Color-bar ───────────────────────────────────────────
+    cbar = fig.colorbar(im, ax=ax)
+    cbar.ax.set_ylabel("Risk Score", rotation=270, labelpad=18)
+
+    plt.tight_layout()
+    return fig
+
+
+# ----------------- 8. 외부 API -----------------------------
+def run_optimizer(budget=None, time_av=None):
+    sol, _ = solve(budget, time_av)
+    picked = (sol.query("selected")
+                   .sort_values("damage", ascending=False)
+                   .reset_index(drop=True)
+                   .rename(columns=COL_MAIN)
+                   [["상품", "문제 키워드", "위험 점수", "필요 예산(원)", "필요 시간(시간)"]])
+    
+    # ① 위험표 계산 (필요 시 max_B, max_T 줄여서 속도 조절)
+    B_vals, T_vals, Z = _build_risk_surface()
+
+    # 사용자 폼 값 (예: 2 500 000원, 200h)
+    fig = plot_heatmap_contour(B_vals, T_vals, Z,
+                               user_B=budget, user_T=time_av)
+
     return picked, fig
 
-# End of file
+# ------------------------- End -----------------------------
+if __name__ == "__main__":
+    picked, fig = run_optimizer(2_500_000, 100)
+    print("\n[우선 처리 리스트]")
+    print(picked.to_string(index=False))
+
+    plt.show()
+
+    input("\n엔터를 누르면 프로그램을 종료합니다 ▶ ")

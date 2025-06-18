@@ -168,7 +168,7 @@ def plan():
     from optimizer import run_optimizer
     result = None
     plot_url = None
-    picked_html = bpB_html = bpT_html = None
+    picked_html = None
     if request.method == 'POST':
         budget = request.form.get('budget', type=float)
         hours = request.form.get('hours', type=float)
