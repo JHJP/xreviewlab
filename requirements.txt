@@ -11,3 +11,4 @@ openai
 openpyxl
 python-dotenv
 sentence-transformers
+faiss-cpu

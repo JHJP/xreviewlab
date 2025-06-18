@@ -117,9 +117,7 @@ import ast
 
 @product_bp.route('/product/<goodsNo>/keyword/<keyword>', methods=['GET'])
 def get_keyword_info(goodsNo, keyword):
-    # 의미 (RAG)
-    meaning = get_keyword_meaning_rag(goodsNo, keyword)
-    # cost, processing_time 조회 (신규: keyword_plan_info)
+    # 1. cost, processing_time 조회 (신규: keyword_plan_info)
     csv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'total_brand_reviews_df.csv')
     df = pd.read_csv(csv_path)
     idxs = df[df['goodsNo'].astype(str) == str(goodsNo)].index
@@ -138,17 +136,28 @@ def get_keyword_info(goodsNo, keyword):
                 except Exception:
                     plan_info = None
             if plan_info and keyword in plan_info:
-                cost = plan_info[keyword].get('cost', '')
-                processing_time = plan_info[keyword].get('time', '')
+                cost_val = plan_info[keyword].get('cost', '')
+                time_val = plan_info[keyword].get('time', '')
+                # Only set '' if missing/null, else keep 0 or value
+                cost = '' if cost_val is None or (isinstance(cost_val, float) and pd.isna(cost_val)) else cost_val
+                processing_time = '' if time_val is None or (isinstance(time_val, float) and pd.isna(time_val)) else time_val
             else:
-                cost = df.at[idx, 'cost'] if 'cost' in df.columns else ''
-                processing_time = df.at[idx, 'processing_time'] if 'processing_time' in df.columns else ''
+                cost_val = df.at[idx, 'cost'] if 'cost' in df.columns else ''
+                time_val = df.at[idx, 'processing_time'] if 'processing_time' in df.columns else ''
+                cost = '' if cost_val is None or (isinstance(cost_val, float) and pd.isna(cost_val)) else cost_val
+                processing_time = '' if time_val is None or (isinstance(time_val, float) and pd.isna(time_val)) else time_val
             break
     return jsonify({
-        'meaning': meaning,
         'cost': cost,
         'processing_time': processing_time
     })
+
+# 의미만 반환하는 별도 엔드포인트
+@product_bp.route('/product/<goodsNo>/keyword/<keyword>/meaning', methods=['GET'])
+def get_keyword_meaning(goodsNo, keyword):
+    from review_utils import get_keyword_meaning_rag
+    meaning = get_keyword_meaning_rag(goodsNo, keyword)
+    return jsonify({'meaning': meaning})
 
 # 대응플랜 생성 탭 (GET/POST)
 from flask import render_template
