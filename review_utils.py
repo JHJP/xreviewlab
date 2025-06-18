@@ -181,6 +181,86 @@ def get_keyword_meaning_rag(goodsNo, keyword, csv_path='total_brand_reviews_df.c
     return resp.choices[0].message.content.strip()
 
 
+def autofill_keyword_cost_time(csv_path='total_brand_reviews_df.csv', voc_store_path='voc_cost_time_faiss.pkl', rag_limit=1, sim_threshold=0.75):
+    """
+    모든 goodsNo의 real_keywords_all에 대해 키워드 의미 RAG+VOC 유사도 기반으로 cost/time 자동 채움.
+    voc_cost_time_loader.py의 벡터스토어를 활용, 없으면 새로 생성.
+    """
+    import pandas as pd
+    import ast
+    import json
+    from tqdm import tqdm
+    from voc_cost_time_loader import VocCostTimeRAG
+    # 1. 벡터스토어 로드
+    if os.path.exists(voc_store_path):
+        rag = VocCostTimeRAG.load(voc_store_path)
+    else:
+        rag = VocCostTimeRAG()
+        rag.save(voc_store_path)
+    # 2. CSV 로드
+    df = pd.read_csv(csv_path)
+    # 3. 모든 goodsNo에서 대표 1개 행의 real_keywords_all 추출 (동일함)
+    goods_sample = df.iloc[0]
+    try:
+        keywords = ast.literal_eval(goods_sample['real_keywords_all'])
+    except Exception:
+        keywords = []
+    # 4. 각 키워드 의미 생성 및 VOC 검색
+    from review_utils import get_keyword_meaning_rag
+    goodsNo = goods_sample['goodsNo']
+    keyword_meanings = {}
+    from sentence_transformers import SentenceTransformer
+    import numpy as np
+    st_model = SentenceTransformer("jhgan/ko-sroberta-multitask")
+    for kw in tqdm(keywords, desc="키워드 의미 RAG 및 VOC 검색"):
+        # 1. 키워드 자체 임베딩 → VOC 벡터스토어 검색
+        kw_emb = st_model.encode([kw], convert_to_numpy=True)
+        # 코사인 유사도 계산
+        voc_embs = rag.embeddings  # shape: (N, D)
+        kw_norm = np.linalg.norm(kw_emb)
+        voc_norms = np.linalg.norm(voc_embs, axis=1)
+        cos_sims = np.dot(voc_embs, kw_emb[0]) / (voc_norms * kw_norm + 1e-8)
+        best_idx = np.argmax(cos_sims)
+        best_sim = cos_sims[best_idx]
+        if best_sim >= 0.5:
+            row = rag.df.iloc[best_idx]
+            cost = int(row["예상 비용(원)"]) if not pd.isnull(row["예상 비용(원)"]) else 0
+            time = int(row["예상 기간(일)"]) if not pd.isnull(row["예상 기간(일)"]) else 0
+            print(f"[키워드매치] keyword: {kw}, sim: {best_sim:.3f}, cost: {cost}, time: {time}")
+        else:
+            # 2. 의미 설명 임베딩 → VOC 벡터스토어 검색
+            meaning = get_keyword_meaning_rag(goodsNo, kw)
+            mean_emb = st_model.encode([meaning], convert_to_numpy=True)
+            mean_norm = np.linalg.norm(mean_emb)
+            cos_sims2 = np.dot(voc_embs, mean_emb[0]) / (voc_norms * mean_norm + 1e-8)
+            best_idx2 = np.argmax(cos_sims2)
+            best_sim2 = cos_sims2[best_idx2]
+            if best_sim2 >= 0.5:
+                row = rag.df.iloc[best_idx2]
+                cost = int(row["예상 비용(원)"]) if not pd.isnull(row["예상 비용(원)"]) else 0
+                time = int(row["예상 기간(일)"]) if not pd.isnull(row["예상 기간(일)"]) else 0
+                print(f"[의미매치] keyword: {kw}, sim: {best_sim2:.3f}, cost: {cost}, time: {time}")
+            else:
+                cost = 0
+                time = 0
+                print(f"[미매치] keyword: {kw}, meaning: {meaning}, sim_kw: {best_sim:.3f}, sim_mean: {best_sim2:.3f}, cost: 0, time: 0")
+        keyword_meanings[kw] = {"cost": cost, "time": time}
+
+    # 5. 모든 행에 keyword_plan_info를 갱신
+    for idx in df.index:
+        try:
+            kw_list = ast.literal_eval(df.at[idx, 'real_keywords_all']) if pd.notnull(df.at[idx, 'real_keywords_all']) else []
+        except Exception:
+            kw_list = []
+        plan_info = {}
+        for kw in kw_list:
+            plan_info[kw] = keyword_meanings.get(kw, {"cost": 0, "time": 0})
+        df.at[idx, 'keyword_plan_info'] = json.dumps(plan_info, ensure_ascii=False)
+    df.to_csv(csv_path, index=False, encoding='utf-8-sig')
+    print(f"[완료] keyword_plan_info cost/time 자동 채움: {csv_path}")
+    return True
+
+
 def update_keyword_info(goodsNo, old_keyword, new_keyword, cost, time, csv_path='total_brand_reviews_df.csv'):
     """
     해당 상품(goodsNo)의 real_keywords_all, real_keywords_dmg_dict에서 old_keyword를 new_keyword로 완전 교체,
@@ -237,3 +317,6 @@ def update_keyword_info(goodsNo, old_keyword, new_keyword, cost, time, csv_path=
         df.at[idx, 'keyword_plan_info'] = json.dumps(plan_info, ensure_ascii=False)
     df.to_csv(csv_path, index=False, encoding='utf-8-sig')
     return True
+
+if __name__ == "__main__":
+    autofill_keyword_cost_time()
