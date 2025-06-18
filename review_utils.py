@@ -199,26 +199,33 @@ def autofill_keyword_cost_time(csv_path='total_brand_reviews_df.csv', voc_store_
         rag.save(voc_store_path)
     # 2. CSV 로드
     df = pd.read_csv(csv_path)
-    # 3. 모든 goodsNo에서 대표 1개 행의 real_keywords_all 추출 (동일함)
-    goods_sample = df.iloc[0]
-    try:
-        keywords = ast.literal_eval(goods_sample['real_keywords_all'])
-    except Exception:
-        keywords = []
-    # 4. 각 키워드 의미 생성 및 VOC 검색
+    # 3. 전체 데이터프레임에서 모든 고유 키워드 수집
+    all_keywords = set()
+    goodsNos_for_keyword = dict()  # 각 키워드별로 어떤 goodsNo에서 등장했는지 추적
+    for idx in df.index:
+        try:
+            kw_list = ast.literal_eval(df.at[idx, 'real_keywords_all']) if pd.notnull(df.at[idx, 'real_keywords_all']) else []
+        except Exception:
+            kw_list = []
+        for kw in kw_list:
+            all_keywords.add(kw)
+            goodsNos_for_keyword.setdefault(kw, set()).add(df.at[idx, 'goodsNo'])
+
+    # 4. 각 고유 키워드에 대해 의미 생성 및 VOC 검색 (goodsNo별 의미 우선, 없으면 아무거나)
     from review_utils import get_keyword_meaning_rag
-    goodsNo = goods_sample['goodsNo']
     keyword_meanings = {}
     from sentence_transformers import SentenceTransformer
     import numpy as np
     st_model = SentenceTransformer("jhgan/ko-sroberta-multitask")
-    for kw in tqdm(keywords, desc="키워드 의미 RAG 및 VOC 검색"):
+    voc_embs = rag.embeddings  # shape: (N, D)
+    voc_norms = np.linalg.norm(voc_embs, axis=1)
+
+    for kw in tqdm(all_keywords, desc="키워드 의미 RAG 및 VOC 검색(전체)"):
+        # 대표 goodsNo 하나 선택 (여러 상품에서 등장 시 아무거나)
+        goodsNo = list(goodsNos_for_keyword[kw])[0]
         # 1. 키워드 자체 임베딩 → VOC 벡터스토어 검색
         kw_emb = st_model.encode([kw], convert_to_numpy=True)
-        # 코사인 유사도 계산
-        voc_embs = rag.embeddings  # shape: (N, D)
         kw_norm = np.linalg.norm(kw_emb)
-        voc_norms = np.linalg.norm(voc_embs, axis=1)
         cos_sims = np.dot(voc_embs, kw_emb[0]) / (voc_norms * kw_norm + 1e-8)
         best_idx = np.argmax(cos_sims)
         best_sim = cos_sims[best_idx]

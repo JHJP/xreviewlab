@@ -217,17 +217,24 @@ def voc_listen():
     with app.test_request_context('/', method='POST', data={'brand_name': brand_name or '', 'brand_url': brand_url or ''}):
         response = index()
     # After crawling, run the follwing functions
-    # --- 키워드 클러스터링 및 damage 집계 실행 ---
     from keyword_clustering_and_damage import run_keyword_clustering_and_damage
     try:
+        logging.info("[INFO] Damage 계산 시작")
         run_keyword_clustering_and_damage('total_brand_reviews_df.csv')
     except Exception as e:
         logging.error(f"[Damage 계산 오류] {e}")
     from embed_reviews import compute_review_embeddings
     try:
+        logging.info("[INFO] 임베딩 시작")
         compute_review_embeddings()
     except Exception as e:
         logging.error(f"[임베딩 오류] {e}")
+    from review_utils import autofill_keyword_cost_time
+    try:
+        logging.info("[INFO] 키워드 자동매칭 시작")
+        autofill_keyword_cost_time()
+    except Exception as e:
+        logging.error(f"[키워드 자동매칭 오류] {e}")
     return response
 
 

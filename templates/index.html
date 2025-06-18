@@ -140,13 +140,22 @@
                 currentKeyword = btn.dataset.keyword;
                 modalTitle.textContent = `키워드 상세: "${currentKeyword}"`;
                 editKeyword.value = currentKeyword;
-                // Fetch keyword info (meaning, cost, time)
+                // Fetch cost/time first
                 fetch(`/product/${currentGoodsNo}/keyword/${encodeURIComponent(currentKeyword)}`)
                   .then(r => r.json())
                   .then(data => {
+                    editCost.value = (data.cost !== undefined && data.cost !== null && data.cost !== '') ? data.cost : '';
+                    editTime.value = (data.time !== undefined && data.time !== null && data.time !== '') ? data.time : ((data.processing_time !== undefined && data.processing_time !== null && data.processing_time !== '') ? data.processing_time : '');
+                  });
+                // Fetch meaning separately
+                gptMeaning.textContent = '불러오는 중...';
+                fetch(`/product/${currentGoodsNo}/keyword/${encodeURIComponent(currentKeyword)}/meaning`)
+                  .then(r => r.json())
+                  .then(data => {
                     gptMeaning.textContent = data.meaning || '-';
-                    editCost.value = data.cost || '';
-                    editTime.value = (data.time !== undefined && data.time !== null && data.time !== '') ? data.time : (data.processing_time || '');
+                  })
+                  .catch(() => {
+                    gptMeaning.textContent = '에러: 정보를 불러올 수 없습니다.';
                   });
                 modal.style.display = 'flex';
               });
